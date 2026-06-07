@@ -8,7 +8,10 @@ A production-grade Python CLI that automates the full cold-outreach pipeline for
 python pipeline.py validate
 python pipeline.py dry-run stripe.com
 python pipeline.py run stripe.com --confirm-send
+python pipeline.py report --run-id 1
 ```
+
+Built by **Rohit Kumar Rai** — [rohit@divfixer.com](mailto:rohit@divfixer.com) | [DivFixer](https://divfixer.com) | [GitHub](https://github.com/rohitkumarrai7)
 
 ---
 
@@ -18,8 +21,10 @@ Sales teams spend hours manually finding lookalike companies, hunting decision-m
 
 1. **Ocean.io** — seed domain → lookalike company domains
 2. **Prospeo** — domains → C-Suite / Founder / VP contacts + LinkedIn URLs
-3. **EazyReach** — LinkedIn URLs → verified work emails
+3. **Prospeo enrich** — LinkedIn URLs → verified work emails
 4. **Brevo** — emails → personalized outreach sent automatically
+
+> **Assignment update (June 7):** EazyReach has been officially removed. Stage 3 uses Prospeo's `enrich-person` endpoint exclusively.
 
 ---
 
@@ -32,9 +37,8 @@ flowchart TB
     Orchestrator --> S2["ProspeoStage"]
     Orchestrator --> S3["EmailResolutionStage"]
     Orchestrator --> S4["BrevoStage"]
-    S3 --> EazyReach["EazyReachProvider"]
-    S3 --> Fallback["ProspeoEnrichProvider"]
-    Orchestrator --> DB["SQLite dedup"]
+    S3 --> ProspeoEnrich["ProspeoEnrichProvider"]
+    Orchestrator --> DB["SQLite dedup + resumability"]
     Orchestrator --> Logger["JSONL logs"]
     Orchestrator --> CSV["CSV exports"]
 ```
@@ -47,9 +51,9 @@ Every stage implements `PipelineStage.run(input) -> output`. The orchestrator on
 
 | Stage | Input | Output | API |
 |-------|-------|--------|-----|
-| 1 | `stripe.com` | 20 lookalike domains | `POST /v3/search/companies` |
-| 2 | company domains | decision-makers + LinkedIn | `POST /search-person` |
-| 3 | LinkedIn URLs | verified work emails | EazyReach or Prospeo `/enrich-person` |
+| 1 | `stripe.com` | lookalike domains | `POST /v3/search/companies` |
+| 2 | company domains | decision-makers + LinkedIn | `POST /search-person` (X-KEY) |
+| 3 | LinkedIn URLs | verified work emails | `POST /enrich-person` (X-API-KEY) |
 | 4 | emails + template vars | sent outreach emails | `POST /v3/smtp/email` |
 
 ---
@@ -59,8 +63,8 @@ Every stage implements `PipelineStage.run(input) -> output`. The orchestrator on
 ### Prerequisites
 
 - Python 3.11+
-- Accounts: [Ocean.io](https://ocean.io), [Prospeo](https://app.prospeo.io/api), [EazyReach](https://eazyreach.app), [Brevo](https://app.brevo.com)
-- A verified sender domain in Brevo (assignment recommends getting a domain first)
+- Accounts: [Ocean.io](https://ocean.io), [Prospeo](https://app.prospeo.io/api), [Brevo](https://app.brevo.com)
+- A verified sender domain in Brevo
 
 ### Install
 
@@ -79,12 +83,6 @@ cp .env.example .env
 # Edit .env with your API keys
 ```
 
-### EazyReach Credits
-
-Per the assignment: create an EazyReach account, then message Vocallabs on WhatsApp **+91 99400 91513** to have credits topped up. Generate your API key at [docs.eazyreach.app/api-keys](https://docs.eazyreach.app/api-keys).
-
-Until EazyReach is configured, the pipeline automatically uses **Prospeo enrich-person** as a fallback for Stage 3.
-
 ---
 
 ## Environment Variables
@@ -92,10 +90,8 @@ Until EazyReach is configured, the pipeline automatically uses **Prospeo enrich-
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OCEAN_IO_API_KEY` | Yes | Ocean.io API token |
-| `PROSPEO_API_KEY` | Yes | Prospeo API key |
-| `EAZYREACH_API_KEY` | No | EazyReach API key (falls back to Prospeo) |
-| `EAZYREACH_BASE_URL` | No | EazyReach API base URL |
-| `BREVO_API_KEY` | For sending | Brevo **REST** API key (not SMTP key) |
+| `PROSPEO_API_KEY` | Yes | Prospeo API key (X-KEY for search, X-API-KEY for enrich) |
+| `BREVO_API_KEY` | For sending | Brevo REST API key (SMTP keys tested for compatibility) |
 | `SENDER_EMAIL` | For sending | Verified sender in Brevo |
 | `SENDER_NAME` | For sending | Display name for outreach |
 | `MAX_COMPANIES` | No | Lookalike companies to fetch (default: 20) |
@@ -107,23 +103,18 @@ Until EazyReach is configured, the pipeline automatically uses **Prospeo enrich-
 ## API Integration Strategy
 
 ### Ocean.io
-- Warmup seed domain (free) before lookalike search
+- Optional warmup via `POST /v2/warmup/companies` (skipped gracefully if unavailable)
 - `POST /v3/search/companies` with `lookalikeDomains` filter
 - Paginate via `searchAfter` cursor
 
 ### Prospeo
-- `POST /search-person` with seniority filter: C-Suite, Founder/Owner, VP
-- Batch up to 500 domains per request
-- Paginate through results
-
-### EazyReach (primary) / Prospeo enrich (fallback)
-- EazyReach: LinkedIn URL → work email via REST API
-- Fallback: `POST /enrich-person` with `only_verified_email: true`
-- Provider selection is automatic based on `EAZYREACH_API_KEY`
+- **Stage 2:** `POST /search-person` with header `X-KEY`, seniority filter C-Suite/Founder/VP
+- **Stage 3:** `POST /enrich-person` with header `X-API-KEY`, `only_verified_email: true`
+- Batch up to 500 domains per search request
 
 ### Brevo
 - `POST /v3/smtp/email` with Jinja2-rendered HTML body
-- 3 rotating subject line variants
+- 3 rotating subject line variants (hash-based deterministic A/B assignment)
 - Safety gate: no sends without `--confirm-send`
 
 ---
@@ -134,6 +125,7 @@ Until EazyReach is configured, the pipeline automatically uses **Prospeo enrich-
 - **Retry with backoff**: automatic retry on 429, 500, 502, 503, 504
 - **Header-driven delays**: reads `Retry-After`, `x-minute-reset-seconds`, `x-sib-ratelimit-reset`
 - **Graceful degradation**: unresolved emails are skipped; run completes with summary
+- **Resumability**: each stage checks SQLite before calling APIs — crash-safe reruns
 
 ---
 
@@ -156,9 +148,11 @@ Until EazyReach is configured, the pipeline automatically uses **Prospeo enrich-
 | 5 | Auto-retry | Exponential backoff on transient errors |
 | 6 | Observability | JSONL request/response logs |
 | 7 | CSV export | companies, contacts, emails, sent_emails |
-| 8 | Personalization | Jinja2 template + 3 subject variants |
+| 8 | Personalization | DivFixer-branded HTML template + 3 subject variants |
 | 9 | Rate limit awareness | Header-driven throttling |
 | 10 | Failure tolerance | Per-item try/except, continue on error |
+| 11 | Resumability | SQLite checkpoint before each API stage |
+| 12 | Report command | Business metrics: cost/lead, deliverability, A/B subjects |
 
 ---
 
@@ -176,11 +170,25 @@ python pipeline.py run stripe.com
 
 # 4. Actually send emails
 python pipeline.py run stripe.com --confirm-send
+
+# 5. View run metrics
+python pipeline.py report --run-id 1
 ```
 
 Check outputs:
 - `outputs/companies.csv`, `contacts.csv`, `emails.csv`, `sent_emails.csv`
 - `logs/requests-YYYYMMDD.jsonl`
+
+### Demo Video
+
+Record a 5–7 minute walkthrough covering:
+
+1. `python pipeline.py validate` — all APIs green
+2. `python pipeline.py dry-run stripe.com` — full pipeline, 0 emails sent
+3. Safety checkpoint preview with Rich table
+4. SQLite deduplication and resumability in action
+5. JSONL logs inspection
+6. `python pipeline.py report --run-id N` — business metrics
 
 ---
 
@@ -192,18 +200,19 @@ Check outputs:
 4. **Safety** — explicit `--confirm-send`; dry-run for exploration
 5. **Resilience** — retry, rate limits, per-item failure isolation
 6. **Observability** — every API call logged to JSONL with timing and status
-7. **Provider pattern** — EazyReach vs Prospeo fallback without changing orchestrator
+7. **Prospeo dual-auth** — `X-KEY` for search, `X-API-KEY` for enrich
+8. **A/B subjects** — hash-based deterministic variant assignment per contact
+9. **Why `--confirm-send` over Y/n prompt?** — explicit flags are safer for CI/CD and non-interactive shells
 
 ---
 
 ## Future Improvements
 
 - Async pipeline with `asyncio` + `httpx.AsyncClient` for parallel enrichment
-- Webhook-based async providers (Ocean.io reveal, EazyReach)
+- PostgreSQL migration for multi-user production deployment
 - CRM export (HubSpot, Salesforce)
-- A/B subject line tracking with open-rate feedback
+- Open-rate feedback loop for A/B subject optimization
 - Web dashboard for run history and analytics
-- Configurable email templates per industry vertical
 
 ---
 
@@ -216,16 +225,16 @@ outreach-engine/
 │   ├── base.py              # PipelineStage exports
 │   ├── ocean.py             # Stage 1
 │   ├── prospeo.py           # Stage 2
-│   ├── eazyreach.py         # Stage 3 (provider adapter)
+│   ├── eazyreach.py         # Stage 3 (Prospeo enrich)
 │   └── brevo.py             # Stage 4
 ├── models/schemas.py        # Pydantic models + PipelineStage ABC
-├── storage/database.py      # SQLite persistence + dedup
+├── storage/database.py      # SQLite persistence + dedup + resumability
 ├── utils/
 │   ├── config.py            # Settings from .env
 │   ├── retry.py             # Backoff + rate limiting
 │   ├── logger.py            # JSONL observability
 │   └── export.py            # CSV export
-├── templates/outreach.j2    # Email template
+├── templates/outreach.j2    # DivFixer-branded HTML email template
 ├── outputs/                 # CSV exports
 └── logs/                    # JSONL request logs
 ```

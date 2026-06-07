@@ -314,16 +314,228 @@ tr:hover td { background: var(--surface-2); }
 .modal h3 { margin-bottom: 1rem; }
 .modal-actions { display: flex; gap: 0.75rem; margin-top: 1.25rem; justify-content: flex-end; }
 
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.empty-state {
+  color: var(--muted);
+  padding: 1rem;
+  font-size: 0.9rem;
+}
+
+.stage-label {
+  color: var(--muted);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.run-badge {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.75rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  color: var(--accent-2);
+}
+
+.flow-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.flow-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.flow-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.flow-header h3 {
+  font-size: 1rem;
+  flex: 1;
+}
+
+.flow-step {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-2);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.flow-count {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.email-preview-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.email-preview-grid.compact {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.email-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.email-card.compact .preview-frame {
+  max-height: 120px;
+}
+
+.email-card-header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.email-num {
+  background: var(--accent);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.email-to { font-size: 0.9rem; }
+.email-meta { color: var(--muted); font-size: 0.8rem; }
+.email-subject {
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent-2);
+}
+
 .preview-frame {
   background: white;
   color: #333;
   border-radius: 8px;
   padding: 1rem;
-  margin-top: 0.75rem;
   font-size: 0.85rem;
-  max-height: 300px;
+  max-height: 280px;
   overflow-y: auto;
 }
+
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.tab {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.tab:hover, .tab.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.report-meta { margin-bottom: 1rem; }
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.report-grid .label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.validation-detail {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+
+.modal-wide {
+  max-width: 720px;
+}
+
+.confirm-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.confirm-stat {
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.confirm-stat span {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.confirm-stat small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+table a {
+  color: var(--accent-2);
+  text-decoration: none;
+}
+
+table a:hover { text-decoration: underline; }
 
 .run-history { display: flex; flex-direction: column; gap: 0.5rem; }
 

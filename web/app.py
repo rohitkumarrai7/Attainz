@@ -140,24 +140,18 @@ async def get_run_data(run_id: int):
     db = Database(get_settings().database_path)
     if not db.get_run(run_id):
         raise HTTPException(404, "Run not found")
-    return {
-        "companies": db.get_all_companies(),
-        "contacts": db.get_all_contacts(),
-        "emails": db.get_all_emails(),
-        "sent_emails": db.get_all_sent_emails(),
-    }
+    return db.get_display_data_for_run(run_id)
 
 
 @app.get("/api/runs/{run_id}/previews")
-async def get_previews(run_id: int, limit: int = 5):
+async def get_previews(run_id: int, limit: int = 100):
     db = Database(get_settings().database_path)
     if not db.get_run(run_id):
         raise HTTPException(404, "Run not found")
     orchestrator = PipelineOrchestrator()
-    enriched = db.get_enriched_contacts_for_linkedin_urls(
-        [c["linkedin_url"] for c in db.get_all_contacts()]
-    )
-    return {"previews": orchestrator.get_email_previews(enriched, limit=limit)}
+    enriched = db.get_enriched_contacts_for_run(run_id)
+    previews = orchestrator.get_email_previews(enriched, limit=limit)
+    return {"previews": previews, "total": len(enriched)}
 
 
 @app.post("/api/runs")

@@ -297,6 +297,121 @@ class Database:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def get_companies_for_run(self, run_id: int) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT domain, name, company_size, country, industries
+                FROM companies WHERE run_id = ? ORDER BY id
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_contacts_for_run(self, run_id: int) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT person_id, linkedin_url, first_name, last_name, full_name,
+                       job_title, company_domain, company_name
+                FROM contacts WHERE run_id = ? ORDER BY id
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_emails_for_run(self, run_id: int) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT e.email, e.provider, e.verified, c.full_name, c.job_title,
+                       c.company_domain, c.linkedin_url
+                FROM emails e
+                LEFT JOIN contacts c ON c.id = e.contact_id
+                WHERE e.run_id = ? ORDER BY e.id
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_sent_emails_for_run(self, run_id: int) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT s.email, s.message_id, s.subject, s.status, s.sent_at,
+                       c.full_name, c.company_domain
+                FROM sent_emails s
+                LEFT JOIN emails e ON e.email = s.email AND e.run_id = s.run_id
+                LEFT JOIN contacts c ON c.id = e.contact_id
+                WHERE s.run_id = ?
+                ORDER BY s.id
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_enriched_contacts_for_run(self, run_id: int) -> list[EnrichedContact]:
+        contacts = self.get_contacts_for_run(run_id)
+        if not contacts:
+            data = self.get_display_data_for_run(run_id)
+            contacts = data.get("contacts", [])
+        urls = [c["linkedin_url"] for c in contacts if c.get("linkedin_url")]
+        return self.get_enriched_contacts_for_linkedin_urls(urls)
+
+    def get_display_data_for_run(self, run_id: int) -> dict[str, Any]:
+        """Run-scoped data with fallback when dedup stores records under earlier runs."""
+        run = self.get_run(run_id)
+        if not run:
+            return {}
+
+        companies = self.get_companies_for_run(run_id)
+        if not companies:
+            companies = [
+                {
+                    "domain": c.domain,
+                    "name": c.name,
+                    "company_size": c.company_size,
+                    "country": c.country,
+                    "industries": json.dumps(c.industries),
+                }
+                for c in self.get_companies_for_seed(run["seed_domain"], limit=100)
+            ]
+        if not companies:
+            companies = self.get_all_companies()
+
+        domains = [c["domain"] for c in companies if c.get("domain")]
+        contacts = self.get_contacts_for_run(run_id)
+        if not contacts and domains:
+            contacts = [
+                {
+                    "person_id": c.person_id,
+                    "linkedin_url": c.linkedin_url,
+                    "first_name": c.first_name,
+                    "last_name": c.last_name,
+                    "full_name": c.full_name,
+                    "job_title": c.job_title,
+                    "company_domain": c.company_domain,
+                    "company_name": c.company_name,
+                }
+                for c in self.get_contacts_for_domains(domains)
+            ]
+
+        emails = self.get_emails_for_run(run_id)
+        if not emails and contacts:
+            all_emails = self.get_all_emails()
+            contact_urls = {c["linkedin_url"] for c in contacts if c.get("linkedin_url")}
+            emails = [e for e in all_emails if e.get("linkedin_url") in contact_urls]
+
+        sent_emails = self.get_sent_emails_for_run(run_id)
+
+        return {
+            "run_id": run_id,
+            "companies": companies,
+            "contacts": contacts,
+            "emails": emails,
+            "sent_emails": sent_emails,
+        }
+
     def get_companies_for_seed(self, seed_domain: str, limit: int) -> list[Company]:
         with self.connection() as conn:
             rows = conn.execute(

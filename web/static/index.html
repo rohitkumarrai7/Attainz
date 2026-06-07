@@ -18,7 +18,7 @@
       </div>
       <nav class="nav">
         <button data-panel="dashboard" class="active">Dashboard</button>
-        <button data-panel="pipeline">Run Pipeline</button>
+        <button data-panel="pipeline">Live Flow</button>
         <button data-panel="results">Results</button>
         <button data-panel="validation">API Status</button>
         <button data-panel="history">Run History</button>
@@ -36,22 +36,22 @@
           <button class="btn btn-secondary" id="btn-validate">Validate APIs</button>
         </div>
         <div class="grid-4">
-          <div class="card">
+          <div class="card stat-card">
             <div class="card-title">Companies Found</div>
             <div class="stat-value" id="stat-companies">—</div>
             <div class="stat-label">Lookalike domains</div>
           </div>
-          <div class="card">
+          <div class="card stat-card">
             <div class="card-title">Decision Makers</div>
             <div class="stat-value" id="stat-contacts">—</div>
-            <div class="card-title">C-Suite / VP level</div>
+            <div class="stat-label">C-Suite / VP level</div>
           </div>
-          <div class="card">
+          <div class="card stat-card">
             <div class="card-title">Emails Resolved</div>
             <div class="stat-value" id="stat-emails">—</div>
             <div class="stat-label">Verified work emails</div>
           </div>
-          <div class="card">
+          <div class="card stat-card">
             <div class="card-title">Ready to Send</div>
             <div class="stat-value" id="stat-send">—</div>
             <div class="stat-label">Outreach emails</div>
@@ -64,15 +64,18 @@
             <button class="btn btn-secondary" id="btn-dry-run">Dry Run</button>
             <button class="btn btn-primary" id="btn-run">Run Pipeline</button>
           </div>
-          <p style="color:var(--muted);font-size:0.85rem">Dry run executes all stages without sending emails. Run pipeline shows a safety checkpoint before delivery.</p>
+          <p class="hint">Dry run collects data and previews emails without sending. Run pipeline pauses for confirmation before delivery.</p>
         </div>
       </section>
 
-      <!-- Pipeline -->
+      <!-- Live Flow -->
       <section id="panel-pipeline" class="panel">
-        <div class="header"><h2>Pipeline Progress</h2></div>
+        <div class="header">
+          <h2>Live Pipeline Flow</h2>
+          <span class="run-badge hidden" id="flow-run-badge"></span>
+        </div>
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        <p id="stage-label" style="color:var(--muted);margin-bottom:1rem"></p>
+        <p id="stage-label" class="stage-label"></p>
         <div class="stages">
           <div class="stage" data-stage="0">
             <div class="num">1</div>
@@ -95,24 +98,81 @@
             <p>Send outreach</p>
           </div>
         </div>
-        <div id="email-previews"></div>
+
+        <div class="flow-timeline">
+          <div class="flow-section" id="flow-companies">
+            <div class="flow-header">
+              <span class="flow-step">Step 1</span>
+              <h3>Companies Discovered</h3>
+              <span class="flow-count" id="flow-companies-count">0</span>
+            </div>
+            <div class="table-wrap" id="flow-companies-table"></div>
+          </div>
+
+          <div class="flow-section" id="flow-contacts">
+            <div class="flow-header">
+              <span class="flow-step">Step 2</span>
+              <h3>Decision Makers</h3>
+              <span class="flow-count" id="flow-contacts-count">0</span>
+            </div>
+            <div class="table-wrap" id="flow-contacts-table"></div>
+          </div>
+
+          <div class="flow-section" id="flow-emails">
+            <div class="flow-header">
+              <span class="flow-step">Step 3</span>
+              <h3>Resolved Emails</h3>
+              <span class="flow-count" id="flow-emails-count">0</span>
+            </div>
+            <div class="table-wrap" id="flow-emails-table"></div>
+          </div>
+
+          <div class="flow-section" id="flow-outreach">
+            <div class="flow-header">
+              <span class="flow-step">Step 4</span>
+              <h3>Outreach Emails Preview</h3>
+              <span class="flow-count" id="flow-outreach-count">0</span>
+            </div>
+            <p class="hint">These are the exact emails that will be sent (or were sent in dry-run preview).</p>
+            <div id="email-previews" class="email-preview-grid"></div>
+          </div>
+
+          <div class="flow-section hidden" id="flow-sent">
+            <div class="flow-header">
+              <span class="flow-step">Delivered</span>
+              <h3>Sent Emails</h3>
+              <span class="flow-count" id="flow-sent-count">0</span>
+            </div>
+            <div class="table-wrap" id="flow-sent-table"></div>
+          </div>
+        </div>
       </section>
 
       <!-- Results -->
       <section id="panel-results" class="panel">
-        <div class="header"><h2>Results</h2></div>
-        <div id="report-meta" class="card" style="margin-bottom:1rem"></div>
-        <div class="card">
-          <div class="card-title">Companies</div>
-          <div class="table-wrap" id="companies-table"></div>
+        <div class="header"><h2>Run Results</h2></div>
+        <div id="report-meta" class="card report-meta"></div>
+        <div class="tabs">
+          <button class="tab active" data-tab="companies">Companies</button>
+          <button class="tab" data-tab="contacts">Contacts</button>
+          <button class="tab" data-tab="emails">Emails</button>
+          <button class="tab" data-tab="outreach">Outreach Preview</button>
+          <button class="tab" data-tab="sent">Sent</button>
         </div>
-        <div class="card" style="margin-top:1rem">
-          <div class="card-title">Contacts</div>
-          <div class="table-wrap" id="contacts-table"></div>
+        <div class="tab-panel active" id="tab-companies">
+          <div class="card"><div class="table-wrap" id="companies-table"></div></div>
         </div>
-        <div class="card" style="margin-top:1rem">
-          <div class="card-title">Emails</div>
-          <div class="table-wrap" id="emails-table"></div>
+        <div class="tab-panel" id="tab-contacts">
+          <div class="card"><div class="table-wrap" id="contacts-table"></div></div>
+        </div>
+        <div class="tab-panel" id="tab-emails">
+          <div class="card"><div class="table-wrap" id="emails-table"></div></div>
+        </div>
+        <div class="tab-panel" id="tab-outreach">
+          <div class="card"><div id="results-previews" class="email-preview-grid"></div></div>
+        </div>
+        <div class="tab-panel" id="tab-sent">
+          <div class="card"><div class="table-wrap" id="sent-table"></div></div>
         </div>
       </section>
 
@@ -135,9 +195,10 @@
 
   <!-- Safety checkpoint modal -->
   <div class="modal-overlay hidden" id="confirm-modal">
-    <div class="modal">
-      <h3>Safety Checkpoint</h3>
+    <div class="modal modal-wide">
+      <h3>Safety Checkpoint — Review Before Sending</h3>
       <div id="confirm-body"></div>
+      <div id="confirm-previews" class="email-preview-grid compact"></div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="btn-cancel-send">Cancel</button>
         <button class="btn btn-danger" id="btn-confirm-send">Confirm & Send Emails</button>

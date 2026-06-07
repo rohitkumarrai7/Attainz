@@ -16,11 +16,9 @@ class Settings(BaseSettings):
 
     ocean_io_api_key: str = ""
     prospeo_api_key: str = ""
-    eazyreach_api_key: str = ""
-    eazyreach_base_url: str = "https://api.eazyreach.app"
     brevo_api_key: str = ""
     sender_email: str = ""
-    sender_name: str = "Outreach Engine"
+    sender_name: str = "Rohit | DivFixer"
 
     max_companies: int = Field(default=20, ge=1, le=10000)
     max_contacts_per_company: int = Field(default=3, ge=1, le=25)
@@ -30,10 +28,6 @@ class Settings(BaseSettings):
     database_path: Path = BASE_DIR / "data" / "outreach.db"
     output_dir: Path = BASE_DIR / "outputs"
     log_dir: Path = BASE_DIR / "logs"
-
-    @property
-    def has_eazyreach(self) -> bool:
-        return bool(self.eazyreach_api_key.strip())
 
     @property
     def has_brevo(self) -> bool:

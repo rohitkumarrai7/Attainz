@@ -1,5 +1,4 @@
 import logging
-from abc import ABC, abstractmethod
 from typing import Any
 
 import httpx
@@ -15,100 +14,13 @@ logger = logging.getLogger("outreach_engine.email_resolution")
 
 PROSPEO_BASE = "https://api.prospeo.io"
 BULK_BATCH = 50
+VERIFIED_STATUSES = {"verified", "valid", "deliverable"}
 
 
-class EmailEnrichmentProvider(ABC):
-    name: str
+class ProspeoEnrichProvider:
+    """Stage 3: LinkedIn URL → verified work email via Prospeo enrich-person."""
 
-    @abstractmethod
-    def resolve_batch(self, contacts: list[Contact]) -> list[EnrichedContact]:
-        raise NotImplementedError
-
-
-class EazyReachProvider(EmailEnrichmentProvider):
-    name = "eazyreach"
-
-    def __init__(
-        self,
-        settings: Settings,
-        jsonl_logger: JsonlRequestLogger,
-    ) -> None:
-        self.settings = settings
-        self.jsonl_logger = jsonl_logger
-        self.rate_limiter = RateLimiter()
-
-    def resolve_batch(self, contacts: list[Contact]) -> list[EnrichedContact]:
-        enriched: list[EnrichedContact] = []
-        headers = {
-            "Authorization": f"Bearer {self.settings.eazyreach_api_key}",
-            "Content-Type": "application/json",
-        }
-
-        with create_http_client() as client:
-            for contact in contacts:
-                try:
-                    email = self._resolve_one(client, headers, contact)
-                    enriched.append(
-                        self._to_enriched(contact, email, "eazyreach", "verified" if email else "unresolved")
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "EazyReach failed for %s: %s",
-                        contact.linkedin_url,
-                        exc,
-                    )
-                    enriched.append(
-                        self._to_enriched(contact, None, "eazyreach", "failed")
-                    )
-        return enriched
-
-    def _resolve_one(
-        self,
-        client: httpx.Client,
-        headers: dict[str, str],
-        contact: Contact,
-    ) -> str | None:
-        payload = {"linkedin_url": contact.linkedin_url}
-        response = request_with_retry(
-            client,
-            "POST",
-            f"{self.settings.eazyreach_base_url.rstrip('/')}/v1/enrich/linkedin",
-            stage="eazyreach",
-            logger=logger,
-            jsonl_logger=self.jsonl_logger,
-            rate_limiter=self.rate_limiter,
-            max_attempts=self.settings.retry_max_attempts,
-            headers=headers,
-            json=payload,
-        )
-        response.raise_for_status()
-        data = response.json()
-        email = (
-            data.get("email")
-            or data.get("work_email")
-            or (data.get("data") or {}).get("email")
-        )
-        if email and data.get("verified", True):
-            return str(email).lower()
-        return None
-
-    def _to_enriched(
-        self,
-        contact: Contact,
-        email: str | None,
-        provider: str,
-        status: str,
-    ) -> EnrichedContact:
-        return EnrichedContact(
-            **contact.model_dump(),
-            email=email,
-            email_status=status,
-            provider=provider,
-        )
-
-
-class ProspeoEnrichProvider(EmailEnrichmentProvider):
-    name = "prospeo_fallback"
+    name = "prospeo"
 
     def __init__(
         self,
@@ -131,14 +43,9 @@ class ProspeoEnrichProvider(EmailEnrichmentProvider):
                 batch = contacts[i : i + BULK_BATCH]
                 for contact in batch:
                     try:
-                        email = self._enrich_one(client, headers, contact)
+                        email, status = self._enrich_one(client, headers, contact)
                         enriched.append(
-                            self._to_enriched(
-                                contact,
-                                email,
-                                "prospeo_fallback",
-                                "verified" if email else "unresolved",
-                            )
+                            self._to_enriched(contact, email, status)
                         )
                     except Exception as exc:
                         logger.warning(
@@ -147,7 +54,7 @@ class ProspeoEnrichProvider(EmailEnrichmentProvider):
                             exc,
                         )
                         enriched.append(
-                            self._to_enriched(contact, None, "prospeo_fallback", "failed")
+                            self._to_enriched(contact, None, "failed")
                         )
         return enriched
 
@@ -156,12 +63,47 @@ class ProspeoEnrichProvider(EmailEnrichmentProvider):
         client: httpx.Client,
         headers: dict[str, str],
         contact: Contact,
-    ) -> str | None:
+    ) -> tuple[str | None, str]:
         payload = {
             "only_verified_email": True,
             "data": {"linkedin_url": contact.linkedin_url},
         }
-        response = request_with_retry(
+        response = self._enrich_request(client, headers, payload)
+        if response.status_code in (401, 403, 400) and "X-KEY" in headers:
+            fallback_headers = {
+                "X-API-KEY": self.settings.prospeo_api_key,
+                "Content-Type": "application/json",
+            }
+            response = self._enrich_request(client, fallback_headers, payload)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("error"):
+            return None, "unresolved"
+
+        person = data.get("person") or data.get("data") or {}
+        if not isinstance(person, dict):
+            return None, "unresolved"
+
+        email_obj = person.get("email")
+        if isinstance(email_obj, dict):
+            status = str(email_obj.get("status", "")).lower()
+            address = email_obj.get("email") or email_obj.get("address")
+            if address and status in VERIFIED_STATUSES | {""}:
+                return str(address).lower(), "verified"
+            return None, "unresolved"
+
+        if isinstance(email_obj, str) and "@" in email_obj:
+            return email_obj.lower(), "verified"
+
+        return None, "unresolved"
+
+    def _enrich_request(
+        self,
+        client: httpx.Client,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+    ) -> httpx.Response:
+        return request_with_retry(
             client,
             "POST",
             f"{PROSPEO_BASE}/enrich-person",
@@ -173,40 +115,18 @@ class ProspeoEnrichProvider(EmailEnrichmentProvider):
             headers=headers,
             json=payload,
         )
-        response.raise_for_status()
-        data = response.json()
-        if data.get("error"):
-            return None
-
-        person = data.get("person") or data.get("data") or {}
-        if not isinstance(person, dict):
-            return None
-
-        email_obj = person.get("email")
-        if isinstance(email_obj, dict):
-            status = str(email_obj.get("status", "")).upper()
-            address = email_obj.get("email") or email_obj.get("address")
-            if address and status in ("VERIFIED", "VALID", "DELIVERABLE", ""):
-                return str(address).lower()
-            return None
-
-        if isinstance(email_obj, str) and "@" in email_obj:
-            return email_obj.lower()
-
-        return None
 
     def _to_enriched(
         self,
         contact: Contact,
         email: str | None,
-        provider: str,
         status: str,
     ) -> EnrichedContact:
         return EnrichedContact(
             **contact.model_dump(),
             email=email,
             email_status=status,
-            provider=provider,
+            provider=self.name,
         )
 
 
@@ -222,13 +142,7 @@ class EmailResolutionStage(PipelineStage):
         self.settings = settings
         self.db = db
         self.jsonl_logger = jsonl_logger
-        self.provider = self._select_provider()
-
-    def _select_provider(self) -> EmailEnrichmentProvider:
-        if self.settings.has_eazyreach:
-            return EazyReachProvider(self.settings, self.jsonl_logger)
-        logger.info("EAZYREACH_API_KEY not set — using Prospeo enrich-person fallback")
-        return ProspeoEnrichProvider(self.settings, self.jsonl_logger)
+        self.provider = ProspeoEnrichProvider(settings, jsonl_logger)
 
     def run(
         self,
@@ -246,17 +160,36 @@ class EmailResolutionStage(PipelineStage):
         if not contacts:
             return StageResult(stage_name=self.name, data=[], items_processed=0)
 
-        enriched = self.provider.resolve_batch(contacts)
+        existing_map = {
+            c.linkedin_url: c
+            for c in self.db.get_enriched_contacts_for_linkedin_urls(
+                [c.linkedin_url for c in contacts]
+            )
+        }
+        pending = [c for c in contacts if c.linkedin_url not in existing_map]
 
-        resolved: list[EnrichedContact] = []
-        errors: list[str] = []
+        if pending:
+            newly_enriched = self.provider.resolve_batch(pending)
+        else:
+            newly_enriched = []
+            logger.info(
+                "Resuming: all %d contacts already enriched in DB",
+                len(contacts),
+            )
+
+        enriched = list(existing_map.values()) + newly_enriched
+
         for contact in enriched:
             if not contact.email:
                 continue
+            if contact.email_status not in VERIFIED_STATUSES:
+                continue
             if not self.db.email_exists(contact.email):
                 self.db.save_email(contact, context.run_id)
-            resolved.append(contact)
 
+        resolved = self.db.get_enriched_contacts_for_linkedin_urls(
+            [c.linkedin_url for c in contacts]
+        )
         context.stats.emails_resolved = len(resolved)
         context.stats.emails_ready_to_send = len(
             [c for c in resolved if not self.db.sent_email_exists(c.email or "")]
@@ -269,5 +202,5 @@ class EmailResolutionStage(PipelineStage):
             items_processed=len(resolved),
             items_failed=failed,
             data=resolved,
-            errors=errors,
+            errors=[],
         )

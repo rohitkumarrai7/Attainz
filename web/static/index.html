@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outreach Engine — SaaS Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">OE</div>
+        <div>
+          <h1>Outreach Engine</h1>
+          <p>by DivFixer</p>
+        </div>
+      </div>
+      <nav class="nav">
+        <button data-panel="dashboard" class="active">Dashboard</button>
+        <button data-panel="pipeline">Run Pipeline</button>
+        <button data-panel="results">Results</button>
+        <button data-panel="validation">API Status</button>
+        <button data-panel="history">Run History</button>
+      </nav>
+      <div class="status-pill" id="status-pill">
+        <span class="dot"></span>Ready
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- Dashboard -->
+      <section id="panel-dashboard" class="panel active">
+        <div class="header">
+          <h2>Dashboard</h2>
+          <button class="btn btn-secondary" id="btn-validate">Validate APIs</button>
+        </div>
+        <div class="grid-4">
+          <div class="card">
+            <div class="card-title">Companies Found</div>
+            <div class="stat-value" id="stat-companies">—</div>
+            <div class="stat-label">Lookalike domains</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Decision Makers</div>
+            <div class="stat-value" id="stat-contacts">—</div>
+            <div class="card-title">C-Suite / VP level</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Emails Resolved</div>
+            <div class="stat-value" id="stat-emails">—</div>
+            <div class="stat-label">Verified work emails</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Ready to Send</div>
+            <div class="stat-value" id="stat-send">—</div>
+            <div class="stat-label">Outreach emails</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Quick Start</div>
+          <div class="pipeline-form">
+            <input class="input" id="seed-domain" type="text" placeholder="Enter seed domain (e.g. stripe.com)" value="stripe.com" />
+            <button class="btn btn-secondary" id="btn-dry-run">Dry Run</button>
+            <button class="btn btn-primary" id="btn-run">Run Pipeline</button>
+          </div>
+          <p style="color:var(--muted);font-size:0.85rem">Dry run executes all stages without sending emails. Run pipeline shows a safety checkpoint before delivery.</p>
+        </div>
+      </section>
+
+      <!-- Pipeline -->
+      <section id="panel-pipeline" class="panel">
+        <div class="header"><h2>Pipeline Progress</h2></div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <p id="stage-label" style="color:var(--muted);margin-bottom:1rem"></p>
+        <div class="stages">
+          <div class="stage" data-stage="0">
+            <div class="num">1</div>
+            <h4>Ocean.io</h4>
+            <p>Lookalike companies</p>
+          </div>
+          <div class="stage" data-stage="1">
+            <div class="num">2</div>
+            <h4>Prospeo</h4>
+            <p>Decision makers</p>
+          </div>
+          <div class="stage" data-stage="2">
+            <div class="num">3</div>
+            <h4>Prospeo Enrich</h4>
+            <p>Verified emails</p>
+          </div>
+          <div class="stage" data-stage="3">
+            <div class="num">4</div>
+            <h4>Brevo</h4>
+            <p>Send outreach</p>
+          </div>
+        </div>
+        <div id="email-previews"></div>
+      </section>
+
+      <!-- Results -->
+      <section id="panel-results" class="panel">
+        <div class="header"><h2>Results</h2></div>
+        <div id="report-meta" class="card" style="margin-bottom:1rem"></div>
+        <div class="card">
+          <div class="card-title">Companies</div>
+          <div class="table-wrap" id="companies-table"></div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <div class="card-title">Contacts</div>
+          <div class="table-wrap" id="contacts-table"></div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <div class="card-title">Emails</div>
+          <div class="table-wrap" id="emails-table"></div>
+        </div>
+      </section>
+
+      <!-- Validation -->
+      <section id="panel-validation" class="panel">
+        <div class="header">
+          <h2>API Status</h2>
+          <button class="btn btn-secondary" id="btn-validate-2" onclick="document.getElementById('btn-validate').click()">Refresh</button>
+        </div>
+        <div class="card validation-grid" id="validation-grid"></div>
+      </section>
+
+      <!-- History -->
+      <section id="panel-history" class="panel">
+        <div class="header"><h2>Run History</h2></div>
+        <div class="card run-history" id="run-history"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Safety checkpoint modal -->
+  <div class="modal-overlay hidden" id="confirm-modal">
+    <div class="modal">
+      <h3>Safety Checkpoint</h3>
+      <div id="confirm-body"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btn-cancel-send">Cancel</button>
+        <button class="btn btn-danger" id="btn-confirm-send">Confirm & Send Emails</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -3,19 +3,16 @@ import json
 import logging
 from pathlib import Path
 
-import httpx
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from models.schemas import EnrichedContact, PipelineContext, PipelineStage, RunMode, SendResult, StageResult
 from storage.database import Database
 from utils.config import Settings
-from utils.http_client import create_http_client
 from utils.logger import JsonlRequestLogger
-from utils.retry import RateLimiter, request_with_retry
+from utils.retry import RateLimiter
 
 logger = logging.getLogger("outreach_engine.brevo")
 
-BREVO_BASE = "https://api.brevo.com"
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 SUBJECT_VARIANTS = [
@@ -86,76 +83,64 @@ class BrevoStage(PipelineStage):
                 data=[],
             )
 
+        from utils.brevo_transport import is_smtp_key, send_via_rest, send_via_smtp
+
         results: list[SendResult] = []
         errors: list[str] = []
-        headers = {
-            "api-key": self.settings.brevo_api_key,
-            "Content-Type": "application/json",
-        }
+        use_smtp = is_smtp_key(self.settings.brevo_api_key)
 
-        with create_http_client() as client:
-            for index, contact in enumerate(sendable):
-                if not contact.email:
-                    continue
-                subject = self._render_subject(contact, index)
-                html_body = self._render_body_html(contact)
+        for index, contact in enumerate(sendable):
+            if not contact.email:
+                continue
+            subject = self._render_subject(contact, index)
+            html_body = self._render_body_html(contact)
+            to_name = contact.full_name or contact.first_name or ""
 
-                payload = {
-                    "sender": {
-                        "name": self.settings.sender_name,
-                        "email": self.settings.sender_email,
-                    },
-                    "to": [
-                        {
-                            "email": contact.email,
-                            "name": contact.full_name or contact.first_name or "",
-                        }
-                    ],
-                    "subject": subject,
-                    "htmlContent": html_body,
-                }
-
-                try:
-                    response = request_with_retry(
-                        client,
-                        "POST",
-                        f"{BREVO_BASE}/v3/smtp/email",
-                        stage=self.name,
-                        logger=logger,
-                        jsonl_logger=self.jsonl_logger,
-                        rate_limiter=self.rate_limiter,
-                        max_attempts=self.settings.retry_max_attempts,
-                        headers=headers,
-                        json=payload,
+            try:
+                if use_smtp:
+                    data = send_via_smtp(
+                        self.settings,
+                        to_email=contact.email,
+                        subject=subject,
+                        html_body=html_body,
                     )
-                    response.raise_for_status()
-                    data = response.json()
-                    result = SendResult(
-                        email=contact.email,
+                else:
+                    data = send_via_rest(
+                        self.settings,
+                        to_email=contact.email,
+                        to_name=to_name,
+                        subject=subject,
+                        html_body=html_body,
+                        rate_limiter=self.rate_limiter,
+                        jsonl_logger=self.jsonl_logger,
+                        max_attempts=self.settings.retry_max_attempts,
+                    )
+                result = SendResult(
+                    email=contact.email,
+                    contact_name=contact.full_name,
+                    company_domain=contact.company_domain,
+                    subject=subject,
+                    message_id=data.get("messageId"),
+                    status="sent",
+                )
+                self.db.save_sent_email(result, context.run_id)
+                results.append(result)
+                context.stats.emails_sent += 1
+            except Exception as exc:
+                msg = f"{contact.email}: {exc}"
+                logger.error("Brevo send failed: %s", msg)
+                errors.append(msg)
+                results.append(
+                    SendResult(
+                        email=contact.email or "",
                         contact_name=contact.full_name,
                         company_domain=contact.company_domain,
                         subject=subject,
-                        message_id=data.get("messageId"),
-                        status="sent",
+                        status="failed",
+                        error=str(exc),
                     )
-                    self.db.save_sent_email(result, context.run_id)
-                    results.append(result)
-                    context.stats.emails_sent += 1
-                except Exception as exc:
-                    msg = f"{contact.email}: {exc}"
-                    logger.error("Brevo send failed: %s", msg)
-                    errors.append(msg)
-                    results.append(
-                        SendResult(
-                            email=contact.email or "",
-                            contact_name=contact.full_name,
-                            company_domain=contact.company_domain,
-                            subject=subject,
-                            status="failed",
-                            error=str(exc),
-                        )
-                    )
-                    context.stats.emails_failed += 1
+                )
+                context.stats.emails_failed += 1
 
         context.stats.emails_ready_to_send = len(sendable)
         return StageResult(

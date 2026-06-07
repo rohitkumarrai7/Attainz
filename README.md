@@ -97,8 +97,9 @@ cp .env.example .env
 |----------|----------|-------------|
 | `OCEAN_IO_API_KEY` | Yes | Ocean.io API token |
 | `PROSPEO_API_KEY` | Yes | Prospeo API key (X-KEY for search, X-API-KEY for enrich) |
-| `BREVO_API_KEY` | For sending | Brevo REST API key (SMTP keys tested for compatibility) |
-| `SENDER_EMAIL` | For sending | Verified sender in Brevo |
+| `BREVO_API_KEY` | For sending | REST API key (`xkeysib-...`) **or** SMTP key (`xsmtpsib-...`) |
+| `BREVO_SMTP_LOGIN` | SMTP only | SMTP login from Brevo → SMTP & API → SMTP tab (e.g. `7abcde@smtp-brevo.com`) |
+| `SENDER_EMAIL` | For sending | Verified sender in Brevo (e.g. `rohit@divfixer.com`) |
 | `SENDER_NAME` | For sending | Display name for outreach |
 | `MAX_COMPANIES` | No | Lookalike companies to fetch (default: 20) |
 | `MAX_CONTACTS_PER_COMPANY` | No | Decision-makers per company (default: 3) |
@@ -119,7 +120,9 @@ cp .env.example .env
 - Batch up to 500 domains per search request
 
 ### Brevo
-- `POST /v3/smtp/email` with Jinja2-rendered HTML body
+- REST API (`xkeysib-...` key): `POST /v3/smtp/email`
+- SMTP relay (`xsmtpsib-...` key): `smtp-relay.brevo.com:587` with `BREVO_SMTP_LOGIN`
+- Jinja2-rendered HTML body for both transports
 - 3 rotating subject line variants (hash-based deterministic A/B assignment)
 - Safety gate: no sends without `--confirm-send`
 

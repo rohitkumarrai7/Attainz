@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ocean_io_api_key: str = ""
     prospeo_api_key: str = ""
     brevo_api_key: str = ""
+    brevo_smtp_login: str = ""
     sender_email: str = ""
     sender_name: str = "Rohit | DivFixer"
 

@@ -106,8 +106,8 @@ def validate() -> None:
         ok = check["ok"]
         status = "[green]OK[/green]" if ok else "[red]FAIL[/red]"
         table.add_row(check["service"], status, check["detail"])
-        if check.get("smtp_warning"):
-            console.print("[yellow]SMTP-style key detected. Testing REST API compatibility...[/yellow]")
+        if check.get("smtp_key"):
+            console.print("[yellow]SMTP key detected — using Brevo SMTP relay for sending.[/yellow]")
 
     console.print(table)
 

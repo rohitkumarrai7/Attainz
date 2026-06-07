@@ -66,44 +66,11 @@ def check_prospeo(api_key: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
-def check_brevo(api_key: str, sender_email: str) -> tuple[bool, str, bool]:
-    """Returns (ok, detail, smtp_warning)."""
-    if not api_key:
-        return False, "BREVO_API_KEY not set", False
+def check_brevo(settings) -> tuple[bool, str, bool]:
+    """Returns (ok, detail, is_smtp_key)."""
+    from utils.brevo_transport import check_brevo as transport_check
 
-    smtp_style = api_key.startswith("xsmtpsib-")
-
-    try:
-        with httpx.Client(timeout=15) as client:
-            headers = {"api-key": api_key}
-            account = client.get("https://api.brevo.com/v3/account", headers=headers)
-            if account.status_code != 200:
-                hint = " Create a REST API key in Brevo dashboard." if smtp_style else ""
-                return False, f"Account check failed: HTTP {account.status_code}.{hint}", smtp_style
-
-            if not sender_email:
-                return False, "SENDER_EMAIL not set in .env", smtp_style
-
-            senders = client.get("https://api.brevo.com/v3/senders", headers=headers)
-            if senders.status_code != 200:
-                return False, f"Senders check failed: HTTP {senders.status_code}", smtp_style
-
-            sender_list = senders.json().get("senders", [])
-            matched = next(
-                (s for s in sender_list if s.get("email", "").lower() == sender_email.lower()),
-                None,
-            )
-            if not matched:
-                available = ", ".join(s.get("email", "") for s in sender_list[:5])
-                return False, f"Sender {sender_email} not found. Available: {available or 'none'}", smtp_style
-
-            active = matched.get("active", False)
-            key_note = " (SMTP key works for REST)" if smtp_style else ""
-            if active:
-                return True, f"Sender {sender_email} verified and active{key_note}", smtp_style
-            return False, f"Sender {sender_email} exists but is NOT verified yet", smtp_style
-    except Exception as exc:
-        return False, str(exc), smtp_style
+    return transport_check(settings)
 
 
 def run_validation(settings) -> dict:
@@ -115,10 +82,13 @@ def run_validation(settings) -> dict:
         ok, detail = fn(*args)
         checks.append({"service": name, "ok": ok, "detail": detail})
 
-    brevo_ok, brevo_detail, smtp_warn = check_brevo(
-        settings.brevo_api_key, settings.sender_email
-    )
-    checks.append({"service": "Brevo", "ok": brevo_ok, "detail": brevo_detail, "smtp_warning": smtp_warn})
+    brevo_ok, brevo_detail, smtp_key = check_brevo(settings)
+    checks.append({
+        "service": "Brevo",
+        "ok": brevo_ok,
+        "detail": brevo_detail,
+        "smtp_key": smtp_key,
+    })
 
     return {
         "all_ok": all(c["ok"] for c in checks),

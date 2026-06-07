@@ -1,10 +1,9 @@
-"""Vercel serverless entrypoint — re-exports the FastAPI app."""
+"""Legacy Vercel entrypoint — use backend.main."""
 
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "backend"))
 
-from web.app import app  # noqa: E402, F401
+from main import app  # noqa: E402, F401

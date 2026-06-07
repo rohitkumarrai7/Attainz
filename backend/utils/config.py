@@ -6,12 +6,12 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VERCEL_TMP = Path("/tmp/outreach-engine")
+PROJECT_ROOT = BASE_DIR.parent
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -42,25 +42,32 @@ class Settings(BaseSettings):
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
 
-def _is_vercel() -> bool:
-    return bool(os.getenv("VERCEL"))
+def _is_render() -> bool:
+    return bool(os.getenv("RENDER"))
+
+
+def _resolve_data_dir() -> Path:
+    legacy = PROJECT_ROOT / "data"
+    if legacy.exists():
+        return legacy
+    return BASE_DIR / "data"
 
 
 def _default_database_path() -> Path:
-    if _is_vercel():
-        return VERCEL_TMP / "data" / "outreach.db"
-    return BASE_DIR / "data" / "outreach.db"
+    return _resolve_data_dir() / "outreach.db"
 
 
 def _default_output_dir() -> Path:
-    if _is_vercel():
-        return VERCEL_TMP / "outputs"
+    legacy = PROJECT_ROOT / "outputs"
+    if legacy.exists():
+        return legacy
     return BASE_DIR / "outputs"
 
 
 def _default_log_dir() -> Path:
-    if _is_vercel():
-        return VERCEL_TMP / "logs"
+    legacy = PROJECT_ROOT / "logs"
+    if legacy.exists():
+        return legacy
     return BASE_DIR / "logs"
 
 

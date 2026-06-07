@@ -1,7 +1,6 @@
-"""FastAPI SaaS dashboard for Outreach Engine."""
+"""FastAPI backend — serves API + frontend static assets."""
 
 import sys
-import threading
 import uuid
 from pathlib import Path
 
@@ -11,22 +10,23 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BACKEND_DIR.parent
+FRONTEND_DIR = PROJECT_ROOT / "frontend"
+
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 from core.orchestrator import PipelineOrchestrator  # noqa: E402
 from core.validation import run_validation  # noqa: E402
+from job_store import job_store  # noqa: E402
 from models.schemas import RunMode  # noqa: E402
 from storage.database import Database  # noqa: E402
 from utils.config import get_settings  # noqa: E402
-from web.job_store import job_store  # noqa: E402
-
-STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="Outreach Engine",
-    description="SaaS dashboard for automated cold-outreach pipeline",
+    description="Automated cold-outreach pipeline API",
     version="1.0.0",
 )
 app.add_middleware(
@@ -41,10 +41,6 @@ class RunRequest(BaseModel):
     domain: str = Field(..., examples=["stripe.com"])
     mode: str = Field("dry_run", pattern="^(dry_run|run)$")
     confirm_send: bool = False
-
-
-class ConfirmRequest(BaseModel):
-    run_id: int
 
 
 def _run_pipeline_task(job_id: str, domain: str, mode: RunMode, confirm_send: bool) -> None:
@@ -105,7 +101,7 @@ def _confirm_send_task(job_id: str, run_id: int) -> None:
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(FRONTEND_DIR / "index.html")
 
 
 @app.get("/api/health")
@@ -115,8 +111,7 @@ async def health():
 
 @app.get("/api/validate")
 async def validate():
-    settings = get_settings()
-    return run_validation(settings)
+    return run_validation(get_settings())
 
 
 @app.get("/api/runs")
@@ -131,8 +126,7 @@ async def get_run(run_id: int):
     run = db.get_run(run_id)
     if not run:
         raise HTTPException(404, "Run not found")
-    report = db.get_run_report(run_id)
-    return {"run": run, "report": report}
+    return {"run": run, "report": db.get_run_report(run_id)}
 
 
 @app.get("/api/runs/{run_id}/data")
@@ -150,8 +144,10 @@ async def get_previews(run_id: int, limit: int = 100):
         raise HTTPException(404, "Run not found")
     orchestrator = PipelineOrchestrator()
     enriched = db.get_enriched_contacts_for_run(run_id)
-    previews = orchestrator.get_email_previews(enriched, limit=limit)
-    return {"previews": previews, "total": len(enriched)}
+    return {
+        "previews": orchestrator.get_email_previews(enriched, limit=limit),
+        "total": len(enriched),
+    }
 
 
 @app.post("/api/runs")
@@ -159,13 +155,10 @@ async def start_run(req: RunRequest, background_tasks: BackgroundTasks):
     domain = req.domain.strip().lower()
     if not domain:
         raise HTTPException(400, "Domain is required")
-
     mode = RunMode.DRY_RUN if req.mode == "dry_run" else RunMode.RUN
     job_id = str(uuid.uuid4())
     job_store.create(job_id)
-    background_tasks.add_task(
-        _run_pipeline_task, job_id, domain, mode, req.confirm_send
-    )
+    background_tasks.add_task(_run_pipeline_task, job_id, domain, mode, req.confirm_send)
     return {"job_id": job_id, "status": "queued"}
 
 
@@ -195,4 +188,5 @@ async def confirm_send_by_run(run_id: int, background_tasks: BackgroundTasks):
     return {"job_id": job_id, "status": "sending"}
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")

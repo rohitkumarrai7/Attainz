@@ -28,10 +28,13 @@ from utils.logger import JsonlRequestLogger, setup_logging  # noqa: E402
 
 app = typer.Typer(
     name="outreach-engine",
-    help="Automated cold-outreach pipeline: Ocean.io → Prospeo → EazyReach → Brevo",
+    help="Automated cold-outreach pipeline: Ocean.io → Prospeo → Prospeo Enrich → Brevo",
     add_completion=False,
 )
 console = Console()
+
+PROSPEO_SEARCH_URL = "https://api.prospeo.io/search-person"
+PROSPEO_ENRICH_URL = "https://api.prospeo.io/enrich-person"
 
 
 class PipelineOrchestrator:
@@ -82,7 +85,7 @@ class PipelineOrchestrator:
             contacts = prospeo_stage.run(companies, context)
             progress.advance(task)
 
-            progress.update(task, description="Stage 3: Email resolution...")
+            progress.update(task, description="Stage 3: Prospeo email enrichment...")
             enriched = email_stage.run(contacts, context)
             progress.advance(task)
 
@@ -125,7 +128,8 @@ def _render_email_previews(contacts: list, brevo_stage: BrevoStage, limit: int =
 
     for i, contact in enumerate(contacts[:limit]):
         subject, body = brevo_stage.render_preview(contact, i)
-        preview = body[:120].replace("\n", " ") + ("..." if len(body) > 120 else "")
+        preview = body[:120].replace("\n", " ").replace("<", " ").replace(">", " ")
+        preview = preview[:120] + ("..." if len(body) > 120 else "")
         table.add_row(contact.email or "—", subject, preview)
 
     console.print(table)
@@ -152,67 +156,74 @@ def _check_ocean(api_key: str) -> tuple[bool, str]:
 def _check_prospeo(api_key: str) -> tuple[bool, str]:
     if not api_key:
         return False, "PROSPEO_API_KEY not set"
+
+    search_payload = {
+        "page": 1,
+        "filters": {
+            "company": {"websites": {"include": ["stripe.com"]}},
+            "person_seniority": {"include": ["C-Suite"]},
+            "max_person_per_company": 1,
+        },
+    }
+    enrich_payload = {
+        "only_verified_email": True,
+        "data": {"linkedin_url": "https://www.linkedin.com/in/williamhgates"},
+    }
+
     try:
         with httpx.Client(timeout=15) as client:
-            r = client.post(
-                "https://api.prospeo.io/search-person",
+            r_search = client.post(
+                PROSPEO_SEARCH_URL,
                 headers={"X-KEY": api_key, "Content-Type": "application/json"},
-                json={
-                    "page": 1,
-                    "filters": {
-                        "company": {"websites": {"include": ["stripe.com"]}},
-                        "person_seniority": {"include": ["C-Suite"]},
-                        "max_person_per_company": 1,
-                    },
-                },
+                json=search_payload,
             )
-            if r.status_code == 200:
-                data = r.json()
-                if data.get("error"):
-                    return False, data.get("message", "API error")
-                return True, "Connected"
-            return False, f"HTTP {r.status_code}: {r.text[:100]}"
+            search_ok = r_search.status_code == 200 and not r_search.json().get("error")
+
+            r_enrich = client.post(
+                PROSPEO_ENRICH_URL,
+                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                json=enrich_payload,
+            )
+            enrich_ok = r_enrich.status_code == 200 and not r_enrich.json().get("error")
+
+            if search_ok and enrich_ok:
+                return True, "X-KEY (search) + X-API-KEY (enrich) working"
+            if search_ok:
+                return True, "X-KEY working (search-person); enrich returned HTTP %s" % r_enrich.status_code
+            if enrich_ok:
+                return True, "X-API-KEY working (enrich-person); search returned HTTP %s" % r_search.status_code
+
+            return False, f"Both auth methods failed: search={r_search.status_code}, enrich={r_enrich.status_code}"
     except Exception as exc:
         return False, str(exc)
 
 
-def _check_eazyreach(api_key: str, base_url: str) -> tuple[bool, str]:
-    if not api_key:
-        return True, "Not configured — Prospeo enrich fallback active"
-    try:
-        with httpx.Client(timeout=15) as client:
-            r = client.get(
-                f"{base_url.rstrip('/')}/v1/health",
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
-            if r.status_code in (200, 404):
-                return True, "API key configured"
-            return False, f"HTTP {r.status_code}: {r.text[:100]}"
-    except Exception as exc:
-        return True, f"Key set (connectivity unverified: {exc})"
-
-
 def _check_brevo(api_key: str, sender_email: str) -> tuple[bool, str]:
     if not api_key:
-        return False, "BREVO_API_KEY not set (use REST API key, not SMTP)"
-    if api_key.startswith("xsmtpsib-"):
-        return False, "SMTP key detected — create a REST API key in Brevo dashboard"
+        return False, "BREVO_API_KEY not set"
+
+    smtp_style = api_key.startswith("xsmtpsib-")
+    if smtp_style:
+        console.print(
+            "[yellow]SMTP-style key detected. Testing REST API compatibility...[/yellow]"
+        )
 
     try:
         with httpx.Client(timeout=15) as client:
             headers = {"api-key": api_key}
             account = client.get("https://api.brevo.com/v3/account", headers=headers)
             if account.status_code != 200:
-                return False, f"Account check failed: HTTP {account.status_code}"
+                hint = " Create a REST API key in Brevo dashboard." if smtp_style else ""
+                return False, f"Account check failed: HTTP {account.status_code}.{hint}"
+
+            if not sender_email:
+                return False, "SENDER_EMAIL not set in .env"
 
             senders = client.get("https://api.brevo.com/v3/senders", headers=headers)
             if senders.status_code != 200:
                 return False, f"Senders check failed: HTTP {senders.status_code}"
 
             sender_list = senders.json().get("senders", [])
-            if not sender_email:
-                return False, "SENDER_EMAIL not set in .env"
-
             matched = next(
                 (s for s in sender_list if s.get("email", "").lower() == sender_email.lower()),
                 None,
@@ -222,8 +233,9 @@ def _check_brevo(api_key: str, sender_email: str) -> tuple[bool, str]:
                 return False, f"Sender {sender_email} not found. Available: {available or 'none'}"
 
             active = matched.get("active", False)
+            key_note = " (SMTP key works for REST)" if smtp_style else ""
             if active:
-                return True, f"Sender {sender_email} is verified and active"
+                return True, f"Sender {sender_email} verified and active{key_note}"
             return False, f"Sender {sender_email} exists but is NOT verified yet"
     except Exception as exc:
         return False, str(exc)
@@ -238,7 +250,6 @@ def validate() -> None:
     checks = [
         ("Ocean.io", *_check_ocean(settings.ocean_io_api_key)),
         ("Prospeo", *_check_prospeo(settings.prospeo_api_key)),
-        ("EazyReach", *_check_eazyreach(settings.eazyreach_api_key, settings.eazyreach_base_url)),
         ("Brevo", *_check_brevo(settings.brevo_api_key, settings.sender_email)),
     ]
 
@@ -250,7 +261,7 @@ def validate() -> None:
     all_ok = True
     for name, ok, detail in checks:
         status = "[green]OK[/green]" if ok else "[red]FAIL[/red]"
-        if not ok and name != "EazyReach":
+        if not ok:
             all_ok = False
         table.add_row(name, status, detail)
 
@@ -326,6 +337,52 @@ def run(
 
     console.print(f"\n[green]Sent {stats.emails_sent} emails.[/green]")
     console.print(f"CSV exports written to [cyan]{orchestrator.settings.output_dir}[/cyan]")
+
+
+@app.command("report")
+def report(
+    run_id: int = typer.Option(..., "--run-id", help="Pipeline run ID to report on"),
+) -> None:
+    """Show business metrics for a completed pipeline run."""
+    settings = get_settings()
+    db = Database(settings.database_path)
+    data = db.get_run_report(run_id)
+
+    if not data:
+        console.print(f"[red]Run ID {run_id} not found.[/red]")
+        recent = db.list_runs(5)
+        if recent:
+            console.print("\nRecent runs:")
+            for r in recent:
+                console.print(f"  Run {r['id']}: {r['seed_domain']} ({r['mode']}) — {r['started_at']}")
+        raise typer.Exit(1)
+
+    table = Table(title=f"Pipeline Report — Run #{run_id}", header_style="bold cyan")
+    table.add_column("Metric", style="dim")
+    table.add_column("Value", justify="right")
+
+    table.add_row("Seed Domain", data["seed_domain"])
+    table.add_row("Mode", data["mode"])
+    table.add_row("Started", data["started_at"] or "—")
+    table.add_row("Finished", data["finished_at"] or "—")
+    table.add_row("Companies Discovered", str(data["companies_discovered"]))
+    table.add_row("Contacts Enriched", str(data["contacts_enriched"]))
+    table.add_row("Emails Resolved", str(data["emails_resolved"]))
+    table.add_row("Emails Sent", str(data["emails_sent"]))
+    table.add_row("Emails Failed", str(data["emails_failed"]))
+    table.add_row("Deliverability Rate", f"{data['deliverability_rate']}%")
+    table.add_row("Est. Cost Per Lead", f"${data['estimated_cost_per_lead']}")
+
+    console.print(table)
+
+    variants = data.get("subject_variants") or []
+    if variants:
+        variant_table = Table(title="A/B Subject Line Distribution", header_style="bold yellow")
+        variant_table.add_column("Subject")
+        variant_table.add_column("Sent", justify="right")
+        for v in variants:
+            variant_table.add_row(v["subject"][:60], str(v["count"]))
+        console.print(variant_table)
 
 
 if __name__ == "__main__":

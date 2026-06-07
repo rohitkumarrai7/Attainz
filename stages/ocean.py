@@ -45,11 +45,7 @@ class OceanStage(PipelineStage):
         }
 
         with create_http_client() as client:
-            try:
-                self._warmup(client, headers, seed.domain)
-            except Exception as exc:
-                logger.warning("Ocean warmup failed for %s: %s", seed.domain, exc)
-                errors.append(f"warmup: {exc}")
+            self._warmup(client, headers, seed.domain)
 
             search_after: list[str] | None = None
             remaining = self.settings.max_companies
@@ -87,10 +83,12 @@ class OceanStage(PipelineStage):
                     break
 
                 batch = self._parse_companies(data)
+                seen_domains = {c.domain for c in companies}
                 for company in batch:
-                    if self.db.company_exists(company.domain):
+                    if company.domain in seen_domains:
                         continue
                     companies.append(company)
+                    seen_domains.add(company.domain)
                     remaining -= 1
                     if remaining <= 0:
                         break
@@ -117,18 +115,21 @@ class OceanStage(PipelineStage):
         headers: dict[str, str],
         domain: str,
     ) -> None:
-        request_with_retry(
-            client,
-            "POST",
-            f"{OCEAN_BASE}/v2/warmup/companies",
-            stage=self.name,
-            logger=logger,
-            jsonl_logger=self.jsonl_logger,
-            rate_limiter=self.rate_limiter,
-            max_attempts=self.settings.retry_max_attempts,
-            headers=headers,
-            json={"domains": [domain]},
-        )
+        try:
+            request_with_retry(
+                client,
+                "POST",
+                f"{OCEAN_BASE}/v2/warmup/companies",
+                stage=self.name,
+                logger=logger,
+                jsonl_logger=self.jsonl_logger,
+                rate_limiter=self.rate_limiter,
+                max_attempts=self.settings.retry_max_attempts,
+                headers=headers,
+                json={"domains": [domain]},
+            )
+        except Exception:
+            logger.info("Ocean warmup skipped (may require paid plan)")
 
     def _parse_companies(self, data: dict[str, Any]) -> list[Company]:
         companies: list[Company] = []

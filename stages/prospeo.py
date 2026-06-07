@@ -6,6 +6,7 @@ import httpx
 from models.schemas import Company, Contact, PipelineContext, PipelineStage, StageResult
 from storage.database import Database
 from utils.config import Settings
+from utils.domain import normalize_domain
 from utils.http_client import create_http_client
 from utils.logger import JsonlRequestLogger
 from utils.retry import RateLimiter, request_with_retry
@@ -32,8 +33,18 @@ class ProspeoStage(PipelineStage):
         self.rate_limiter = RateLimiter()
 
     def run(self, input_data: list[Company], context: PipelineContext) -> list[Contact]:
+        domains = [c.domain for c in input_data]
         result = self._execute(input_data, context)
-        return result.data or []
+
+        all_contacts = self.db.get_contacts_for_domains(domains)
+        if all_contacts and not result.data:
+            logger.info(
+                "Resuming: %d contacts loaded from DB for %d companies",
+                len(all_contacts),
+                len(domains),
+            )
+        context.stats.decision_makers_found = len(all_contacts)
+        return all_contacts
 
     def _execute(
         self,
@@ -136,7 +147,7 @@ class ProspeoStage(PipelineStage):
         if not linkedin_url:
             return None
 
-        company_domain = (company.get("website") or "").strip().lower()
+        company_domain = normalize_domain(company.get("website") or "")
         if not company_domain:
             return None
 

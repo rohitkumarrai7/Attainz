@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -167,10 +168,21 @@ class BrevoStage(PipelineStage):
         )
 
     def _contact_vars(self, contact: EnrichedContact) -> dict[str, str]:
+        industry = "tech"
+        company = self.db.get_company_by_domain(contact.company_domain)
+        if company and company.get("industries"):
+            try:
+                industries = json.loads(company["industries"])
+                if industries:
+                    industry = industries[0]
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         return {
             "first_name": contact.first_name or (contact.full_name or "there").split()[0],
             "company_name": contact.company_name or contact.company_domain,
             "job_title": contact.job_title or "leader",
+            "industry": industry,
             "sender_name": self.settings.sender_name,
         }
 
@@ -187,15 +199,8 @@ class BrevoStage(PipelineStage):
 
     def _render_body(self, contact: EnrichedContact) -> str:
         template = self.jinja_env.get_template("outreach.j2")
-        return template.render(**self._contact_vars(contact))
+        html = template.render(**self._contact_vars(contact))
+        return html
 
     def _render_body_html(self, contact: EnrichedContact) -> str:
-        body = self._render_body(contact)
-        paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
-        html_parts = []
-        for p in paragraphs:
-            if p.startswith("Best,"):
-                html_parts.append(f"<p>{p.replace(chr(10), '<br>')}</p>")
-            else:
-                html_parts.append(f"<p>{p}</p>")
-        return "\n".join(html_parts)
+        return self._render_body(contact)

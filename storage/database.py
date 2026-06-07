@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from models.schemas import Company, Contact, EnrichedContact, RunMode, SendResult
+from utils.domain import normalize_domain
 
 
 class Database:
@@ -293,5 +294,212 @@ class Database:
         with self.connection() as conn:
             rows = conn.execute(
                 "SELECT email, message_id, subject, status, sent_at FROM sent_emails ORDER BY id"
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def get_companies_for_seed(self, seed_domain: str, limit: int) -> list[Company]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT c.domain, c.name, c.company_size, c.country, c.industries
+                FROM companies c
+                JOIN runs r ON c.run_id = r.id
+                WHERE r.seed_domain = ?
+                ORDER BY c.id DESC
+                LIMIT ?
+                """,
+                (seed_domain.lower(), limit),
+            ).fetchall()
+        return [
+            Company(
+                domain=row["domain"],
+                name=row["name"],
+                company_size=row["company_size"],
+                country=row["country"],
+                industries=json.loads(row["industries"] or "[]"),
+            )
+            for row in rows
+        ]
+
+    def get_contacts_for_domains(self, domains: list[str]) -> list[Contact]:
+        if not domains:
+            return []
+        normalized = [normalize_domain(d) for d in domains]
+        placeholders = ",".join("?" * len(normalized))
+        with self.connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT person_id, linkedin_url, first_name, last_name, full_name,
+                       job_title, company_domain, company_name
+                FROM contacts
+                WHERE REPLACE(REPLACE(LOWER(company_domain), 'https://', ''), 'http://', '')
+                      IN ({placeholders})
+                ORDER BY id
+                """,
+                normalized,
+            ).fetchall()
+        return [
+            Contact(
+                person_id=row["person_id"],
+                linkedin_url=row["linkedin_url"],
+                first_name=row["first_name"],
+                last_name=row["last_name"],
+                full_name=row["full_name"],
+                job_title=row["job_title"],
+                company_domain=normalize_domain(row["company_domain"]),
+                company_name=row["company_name"],
+            )
+            for row in rows
+        ]
+
+    def get_enriched_contacts_for_linkedin_urls(
+        self, linkedin_urls: list[str]
+    ) -> list[EnrichedContact]:
+        if not linkedin_urls:
+            return []
+        placeholders = ",".join("?" * len(linkedin_urls))
+        with self.connection() as conn:
+            contact_rows = conn.execute(
+                f"""
+                SELECT id, person_id, linkedin_url, first_name, last_name,
+                       full_name, job_title, company_domain, company_name
+                FROM contacts
+                WHERE linkedin_url IN ({placeholders})
+                ORDER BY id
+                """,
+                linkedin_urls,
+            ).fetchall()
+
+            enriched: list[EnrichedContact] = []
+            for contact in contact_rows:
+                email_row = conn.execute(
+                    """
+                    SELECT email, provider, verified FROM emails
+                    WHERE contact_id = ?
+                    LIMIT 1
+                    """,
+                    (contact["id"],),
+                ).fetchone()
+
+                if not email_row:
+                    domain = normalize_domain(contact["company_domain"])
+                    email_row = conn.execute(
+                        """
+                        SELECT email, provider, verified FROM emails
+                        WHERE email LIKE ? AND contact_id IS NULL
+                        LIMIT 1
+                        """,
+                        (f"%@{domain}",),
+                    ).fetchone()
+                    if email_row:
+                        conn.execute(
+                            "UPDATE emails SET contact_id = ? WHERE email = ?",
+                            (contact["id"], email_row["email"]),
+                        )
+
+                if not email_row:
+                    continue
+
+                enriched.append(
+                    EnrichedContact(
+                        person_id=contact["person_id"],
+                        linkedin_url=contact["linkedin_url"],
+                        first_name=contact["first_name"],
+                        last_name=contact["last_name"],
+                        full_name=contact["full_name"],
+                        job_title=contact["job_title"],
+                        company_domain=normalize_domain(contact["company_domain"]),
+                        company_name=contact["company_name"],
+                        email=email_row["email"],
+                        email_status="verified" if email_row["verified"] else "unresolved",
+                        provider=email_row["provider"] or "prospeo",
+                    )
+                )
+        return enriched
+
+    def get_company_by_domain(self, domain: str) -> dict[str, Any] | None:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT domain, name, industries FROM companies WHERE domain = ?",
+                (domain.lower(),),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_run(self, run_id: int) -> dict[str, Any] | None:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT id, seed_domain, mode, started_at, finished_at, stats_json FROM runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()
+            if not row:
+                return None
+            result = dict(row)
+            if result.get("stats_json"):
+                result["stats"] = json.loads(result["stats_json"])
+            return result
+
+    def get_run_report(self, run_id: int) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        if not run:
+            return {}
+
+        with self.connection() as conn:
+            companies = conn.execute(
+                "SELECT COUNT(*) as n FROM companies WHERE run_id = ?", (run_id,)
+            ).fetchone()["n"]
+            contacts = conn.execute(
+                "SELECT COUNT(*) as n FROM contacts WHERE run_id = ?", (run_id,)
+            ).fetchone()["n"]
+            emails = conn.execute(
+                "SELECT COUNT(*) as n FROM emails WHERE run_id = ?", (run_id,)
+            ).fetchone()["n"]
+            sent = conn.execute(
+                "SELECT COUNT(*) as n FROM sent_emails WHERE run_id = ? AND status = 'sent'",
+                (run_id,),
+            ).fetchone()["n"]
+            failed = conn.execute(
+                "SELECT COUNT(*) as n FROM sent_emails WHERE run_id = ? AND status = 'failed'",
+                (run_id,),
+            ).fetchone()["n"]
+            subjects = conn.execute(
+                """
+                SELECT subject, COUNT(*) as count
+                FROM sent_emails WHERE run_id = ? AND status = 'sent'
+                GROUP BY subject ORDER BY count DESC
+                """,
+                (run_id,),
+            ).fetchall()
+
+        stats = run.get("stats") or {}
+        emails_resolved = stats.get("emails_resolved", emails)
+        deliverability = (
+            round(sent / emails_resolved * 100, 1) if emails_resolved else 0.0
+        )
+        cost_per_lead = round(
+            (companies * 0.2 + contacts * 0.04 + emails * 1.0) / max(sent, 1), 2
+        )
+
+        return {
+            "run_id": run_id,
+            "seed_domain": run["seed_domain"],
+            "mode": run["mode"],
+            "started_at": run["started_at"],
+            "finished_at": run["finished_at"],
+            "companies_discovered": companies,
+            "contacts_enriched": contacts,
+            "emails_resolved": emails_resolved,
+            "emails_sent": sent,
+            "emails_failed": failed,
+            "deliverability_rate": deliverability,
+            "estimated_cost_per_lead": cost_per_lead,
+            "subject_variants": [dict(s) for s in subjects],
+            "stats": stats,
+        }
+
+    def list_runs(self, limit: int = 10) -> list[dict[str, Any]]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, seed_domain, mode, started_at, finished_at FROM runs ORDER BY id DESC LIMIT ?",
+                (limit,),
             ).fetchall()
             return [dict(row) for row in rows]

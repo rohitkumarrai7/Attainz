@@ -1,12 +1,22 @@
-Hi {{ first_name }},
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <p>Hi {{ first_name | default("there") }},</p>
 
-I noticed your work as {{ job_title }} at {{ company_name }} and thought there might be a fit.
+    <p>I noticed {{ company_name }} is scaling in the {{ industry | default("tech") }} space.
+    As a fellow builder (I run <a href="https://divfixer.com">DivFixer</a> — we help teams
+    automate repetitive outreach), I wanted to reach out personally.</p>
 
-We help growth teams automate their entire outbound pipeline — from sourcing lookalike accounts to finding decision-makers, resolving verified emails, and sending personalized outreach with zero manual handoffs.
+    <p>Most companies at your stage spend 15+ hours/week on manual prospecting.
+    I built a pipeline that finds lookalike companies, surfaces decision-makers,
+    and sends personalized emails — all in one command.</p>
 
-If you're exploring ways to scale outbound without adding headcount, I'd love to share how teams like yours are cutting prospecting time by 80%.
+    <p>Would you be open to a 10-minute call next week? I'd love to show you
+    what I built and get your feedback as a {{ job_title | default("leader") }}.</p>
 
-Would a 15-minute call next week work?
-
-Best,
-{{ sender_name }}
+    <p>Best,<br>
+    <strong>Rohit</strong><br>
+    Founder, DivFixer<br>
+    <a href="https://divfixer.com">divfixer.com</a> |
+    <a href="https://github.com/rohitkumarrai7">github.com/rohitkumarrai7</a></p>
+</body>
+</html>

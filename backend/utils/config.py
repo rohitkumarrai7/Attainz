@@ -47,6 +47,8 @@ def _is_render() -> bool:
 
 
 def _resolve_data_dir() -> Path:
+    if _is_render():
+        return Path("/tmp/outreach-engine/data")
     legacy = PROJECT_ROOT / "data"
     if legacy.exists():
         return legacy
@@ -58,6 +60,8 @@ def _default_database_path() -> Path:
 
 
 def _default_output_dir() -> Path:
+    if _is_render():
+        return Path("/tmp/outreach-engine/outputs")
     legacy = PROJECT_ROOT / "outputs"
     if legacy.exists():
         return legacy
@@ -65,6 +69,8 @@ def _default_output_dir() -> Path:
 
 
 def _default_log_dir() -> Path:
+    if _is_render():
+        return Path("/tmp/outreach-engine/logs")
     legacy = PROJECT_ROOT / "logs"
     if legacy.exists():
         return legacy

@@ -3,93 +3,159 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Outreach Engine — SaaS Dashboard</title>
+  <title>Outreach Engine — by DivFixer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <div class="bg-mesh"></div>
   <div class="app">
     <aside class="sidebar">
       <div class="logo">
-        <div class="logo-icon">OE</div>
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
         <div>
           <h1>Outreach Engine</h1>
-          <p>by DivFixer</p>
+          <p>DivFixer · Automated GTM</p>
         </div>
       </div>
+
       <nav class="nav">
-        <button data-panel="dashboard" class="active">Dashboard</button>
-        <button data-panel="pipeline">Live Flow</button>
-        <button data-panel="results">Results</button>
-        <button data-panel="validation">API Status</button>
-        <button data-panel="history">Run History</button>
+        <button data-panel="dashboard" class="active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </button>
+        <button data-panel="pipeline">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Live Flow
+        </button>
+        <button data-panel="results">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Results
+        </button>
+        <button data-panel="validation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          API Status
+        </button>
+        <button data-panel="history">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Run History
+        </button>
       </nav>
-      <div class="status-pill" id="status-pill">
-        <span class="dot"></span>Ready
+
+      <div class="sidebar-footer">
+        <div class="status-pill" id="status-pill">
+          <span class="dot"></span>
+          <span class="status-text">Ready</span>
+        </div>
+        <div class="brand-tag">Ocean → Prospeo → Brevo</div>
       </div>
     </aside>
 
     <main class="main">
       <!-- Dashboard -->
       <section id="panel-dashboard" class="panel active">
-        <div class="header">
-          <h2>Dashboard</h2>
-          <button class="btn btn-secondary" id="btn-validate">Validate APIs</button>
+        <div class="page-header">
+          <div>
+            <p class="eyebrow">Overview</p>
+            <h2>Pipeline Dashboard</h2>
+          </div>
+          <button class="btn btn-ghost" id="btn-validate">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Validate APIs
+          </button>
         </div>
+
         <div class="grid-4">
-          <div class="card stat-card">
-            <div class="card-title">Companies Found</div>
-            <div class="stat-value" id="stat-companies">—</div>
-            <div class="stat-label">Lookalike domains</div>
+          <div class="stat-card accent-blue">
+            <div class="stat-icon">🏢</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-companies">—</div>
+              <div class="stat-label">Companies Found</div>
+            </div>
           </div>
-          <div class="card stat-card">
-            <div class="card-title">Decision Makers</div>
-            <div class="stat-value" id="stat-contacts">—</div>
-            <div class="stat-label">C-Suite / VP level</div>
+          <div class="stat-card accent-violet">
+            <div class="stat-icon">👤</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-contacts">—</div>
+              <div class="stat-label">Decision Makers</div>
+            </div>
           </div>
-          <div class="card stat-card">
-            <div class="card-title">Emails Resolved</div>
-            <div class="stat-value" id="stat-emails">—</div>
-            <div class="stat-label">Verified work emails</div>
+          <div class="stat-card accent-cyan">
+            <div class="stat-icon">✉️</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-emails">—</div>
+              <div class="stat-label">Emails Resolved</div>
+            </div>
           </div>
-          <div class="card stat-card">
-            <div class="card-title">Ready to Send</div>
-            <div class="stat-value" id="stat-send">—</div>
-            <div class="stat-label">Outreach emails</div>
+          <div class="stat-card accent-emerald">
+            <div class="stat-icon">🚀</div>
+            <div class="stat-body">
+              <div class="stat-value" id="stat-send">—</div>
+              <div class="stat-label">Ready to Send</div>
+            </div>
           </div>
         </div>
-        <div class="card">
-          <div class="card-title">Quick Start</div>
-          <div class="pipeline-form">
-            <input class="input" id="seed-domain" type="text" placeholder="Enter seed domain (e.g. stripe.com)" value="stripe.com" />
-            <button class="btn btn-secondary" id="btn-dry-run">Dry Run</button>
-            <button class="btn btn-primary" id="btn-run">Run Pipeline</button>
+
+        <div class="card hero-card">
+          <div class="hero-content">
+            <h3>Start a new outreach run</h3>
+            <p>Enter a seed company domain. The pipeline discovers lookalikes, finds decision-makers, enriches emails, and prepares personalized outreach.</p>
           </div>
-          <p class="hint">Dry run collects data and previews emails without sending. Run pipeline pauses for confirmation before delivery.</p>
+          <div class="pipeline-form">
+            <div class="input-group">
+              <label for="seed-domain">Seed domain</label>
+              <input class="input" id="seed-domain" type="text" placeholder="stripe.com" value="stripe.com" />
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-secondary" id="btn-dry-run">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Dry Run
+              </button>
+              <button class="btn btn-primary" id="btn-run">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Run Pipeline
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- Live Flow -->
       <section id="panel-pipeline" class="panel">
-        <div class="header">
-          <h2>Live Pipeline Flow</h2>
+        <div class="page-header">
+          <div>
+            <p class="eyebrow">Real-time</p>
+            <h2>Live Pipeline Flow</h2>
+          </div>
           <span class="run-badge hidden" id="flow-run-badge"></span>
         </div>
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        <p id="stage-label" class="stage-label"></p>
+
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <p id="stage-label" class="stage-label">Waiting to start...</p>
+        </div>
+
         <div class="stages">
           <div class="stage" data-stage="0">
+            <div class="stage-connector"></div>
             <div class="num">1</div>
             <h4>Ocean.io</h4>
             <p>Lookalike companies</p>
           </div>
           <div class="stage" data-stage="1">
+            <div class="stage-connector"></div>
             <div class="num">2</div>
             <h4>Prospeo</h4>
             <p>Decision makers</p>
           </div>
           <div class="stage" data-stage="2">
+            <div class="stage-connector"></div>
             <div class="num">3</div>
-            <h4>Prospeo Enrich</h4>
+            <h4>Enrich</h4>
             <p>Verified emails</p>
           </div>
           <div class="stage" data-stage="3">
@@ -102,46 +168,41 @@
         <div class="flow-timeline">
           <div class="flow-section" id="flow-companies">
             <div class="flow-header">
-              <span class="flow-step">Step 1</span>
+              <span class="flow-step">01</span>
               <h3>Companies Discovered</h3>
               <span class="flow-count" id="flow-companies-count">0</span>
             </div>
             <div class="table-wrap" id="flow-companies-table"></div>
           </div>
-
           <div class="flow-section" id="flow-contacts">
             <div class="flow-header">
-              <span class="flow-step">Step 2</span>
+              <span class="flow-step">02</span>
               <h3>Decision Makers</h3>
               <span class="flow-count" id="flow-contacts-count">0</span>
             </div>
             <div class="table-wrap" id="flow-contacts-table"></div>
           </div>
-
           <div class="flow-section" id="flow-emails">
             <div class="flow-header">
-              <span class="flow-step">Step 3</span>
+              <span class="flow-step">03</span>
               <h3>Resolved Emails</h3>
               <span class="flow-count" id="flow-emails-count">0</span>
             </div>
             <div class="table-wrap" id="flow-emails-table"></div>
           </div>
-
           <div class="flow-section" id="flow-outreach">
             <div class="flow-header">
-              <span class="flow-step">Step 4</span>
-              <h3>Outreach Emails Preview</h3>
+              <span class="flow-step">04</span>
+              <h3>Outreach Email Previews</h3>
               <span class="flow-count" id="flow-outreach-count">0</span>
             </div>
-            <p class="hint">These are the exact emails that will be sent (or were sent in dry-run preview).</p>
             <div id="email-previews" class="email-preview-grid"></div>
           </div>
-
           <div class="flow-section hidden" id="flow-sent">
             <div class="flow-header">
-              <span class="flow-step">Delivered</span>
-              <h3>Sent Emails</h3>
-              <span class="flow-count" id="flow-sent-count">0</span>
+              <span class="flow-step done">✓</span>
+              <h3>Delivered Emails</h3>
+              <span class="flow-count success" id="flow-sent-count">0</span>
             </div>
             <div class="table-wrap" id="flow-sent-table"></div>
           </div>
@@ -150,58 +211,68 @@
 
       <!-- Results -->
       <section id="panel-results" class="panel">
-        <div class="header"><h2>Run Results</h2></div>
+        <div class="page-header">
+          <div>
+            <p class="eyebrow">Analytics</p>
+            <h2>Run Results</h2>
+          </div>
+        </div>
         <div id="report-meta" class="card report-meta"></div>
         <div class="tabs">
           <button class="tab active" data-tab="companies">Companies</button>
           <button class="tab" data-tab="contacts">Contacts</button>
           <button class="tab" data-tab="emails">Emails</button>
-          <button class="tab" data-tab="outreach">Outreach Preview</button>
+          <button class="tab" data-tab="outreach">Outreach</button>
           <button class="tab" data-tab="sent">Sent</button>
         </div>
-        <div class="tab-panel active" id="tab-companies">
-          <div class="card"><div class="table-wrap" id="companies-table"></div></div>
-        </div>
-        <div class="tab-panel" id="tab-contacts">
-          <div class="card"><div class="table-wrap" id="contacts-table"></div></div>
-        </div>
-        <div class="tab-panel" id="tab-emails">
-          <div class="card"><div class="table-wrap" id="emails-table"></div></div>
-        </div>
-        <div class="tab-panel" id="tab-outreach">
-          <div class="card"><div id="results-previews" class="email-preview-grid"></div></div>
-        </div>
-        <div class="tab-panel" id="tab-sent">
-          <div class="card"><div class="table-wrap" id="sent-table"></div></div>
-        </div>
+        <div class="tab-panel active" id="tab-companies"><div class="card"><div class="table-wrap" id="companies-table"></div></div></div>
+        <div class="tab-panel" id="tab-contacts"><div class="card"><div class="table-wrap" id="contacts-table"></div></div></div>
+        <div class="tab-panel" id="tab-emails"><div class="card"><div class="table-wrap" id="emails-table"></div></div></div>
+        <div class="tab-panel" id="tab-outreach"><div class="card"><div id="results-previews" class="email-preview-grid"></div></div></div>
+        <div class="tab-panel" id="tab-sent"><div class="card"><div class="table-wrap" id="sent-table"></div></div></div>
       </section>
 
       <!-- Validation -->
       <section id="panel-validation" class="panel">
-        <div class="header">
-          <h2>API Status</h2>
-          <button class="btn btn-secondary" id="btn-validate-2" onclick="document.getElementById('btn-validate').click()">Refresh</button>
+        <div class="page-header">
+          <div>
+            <p class="eyebrow">Health</p>
+            <h2>API Status</h2>
+          </div>
+          <button class="btn btn-ghost" onclick="document.getElementById('btn-validate').click()">Refresh</button>
         </div>
-        <div class="card validation-grid" id="validation-grid"></div>
+        <div class="validation-grid" id="validation-grid"></div>
       </section>
 
       <!-- History -->
       <section id="panel-history" class="panel">
-        <div class="header"><h2>Run History</h2></div>
-        <div class="card run-history" id="run-history"></div>
+        <div class="page-header">
+          <div>
+            <p class="eyebrow">Archive</p>
+            <h2>Run History</h2>
+          </div>
+        </div>
+        <div class="run-history" id="run-history"></div>
       </section>
     </main>
   </div>
 
-  <!-- Safety checkpoint modal -->
+  <div class="toast hidden" id="toast"></div>
+
   <div class="modal-overlay hidden" id="confirm-modal">
     <div class="modal modal-wide">
-      <h3>Safety Checkpoint — Review Before Sending</h3>
+      <div class="modal-header">
+        <div class="modal-icon">⚠️</div>
+        <div>
+          <h3>Safety Checkpoint</h3>
+          <p class="modal-sub">Review recipients before sending</p>
+        </div>
+      </div>
       <div id="confirm-body"></div>
       <div id="confirm-previews" class="email-preview-grid compact"></div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="btn-cancel-send">Cancel</button>
-        <button class="btn btn-danger" id="btn-confirm-send">Confirm & Send Emails</button>
+        <button class="btn btn-danger" id="btn-confirm-send">Confirm & Send</button>
       </div>
     </div>
   </div>

@@ -2,6 +2,7 @@
 
 import logging
 import smtplib
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -141,18 +142,31 @@ def send_via_smtp(
     to_email: str,
     subject: str,
     html_body: str,
+    max_attempts: int = 5,
 ) -> dict:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{settings.sender_name} <{settings.sender_email}>"
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html"))
+    raw = msg.as_string()
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-        server.login(settings.brevo_smtp_login, settings.brevo_api_key)
-        server.sendmail(settings.sender_email, [to_email], msg.as_string())
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(settings.brevo_smtp_login, settings.brevo_api_key)
+                server.sendmail(settings.sender_email, [to_email], raw)
+            return {"messageId": None, "transport": "smtp"}
+        except (smtplib.SMTPException, ConnectionError, OSError) as exc:
+            last_exc = exc
+            if attempt >= max_attempts:
+                raise
+            delay = 2 ** attempt
+            logger.warning("SMTP attempt %d/%d failed, retry in %ds: %s", attempt, max_attempts, delay, exc)
+            time.sleep(delay)
 
-    return {"messageId": None, "transport": "smtp"}
+    raise last_exc or RuntimeError("SMTP send failed")

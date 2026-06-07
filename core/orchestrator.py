@@ -5,7 +5,7 @@ from typing import Any
 
 from models.schemas import PipelineContext, PipelineStats, RunMode, SeedDomain
 from stages.brevo import BrevoStage
-from stages.eazyreach import EmailResolutionStage
+from stages.email_resolution import EmailResolutionStage
 from stages.ocean import OceanStage
 from stages.prospeo import ProspeoStage
 from storage.database import Database

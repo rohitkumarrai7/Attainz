@@ -276,7 +276,7 @@ outreach-engine/
 │   ├── base.py              # PipelineStage exports
 │   ├── ocean.py             # Stage 1
 │   ├── prospeo.py           # Stage 2
-│   ├── eazyreach.py         # Stage 3 (Prospeo enrich)
+│   ├── email_resolution.py  # Stage 3 (Prospeo enrich)
 │   └── brevo.py             # Stage 4
 ├── models/schemas.py        # Pydantic models + PipelineStage ABC
 ├── storage/database.py      # SQLite persistence + dedup + resumability

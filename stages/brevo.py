@@ -103,6 +103,7 @@ class BrevoStage(PipelineStage):
                         to_email=contact.email,
                         subject=subject,
                         html_body=html_body,
+                        max_attempts=self.settings.retry_max_attempts,
                     )
                 else:
                     data = send_via_rest(

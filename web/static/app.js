@@ -46,7 +46,17 @@ function updateStages(stage) {
 function setStatus(text, type = "ok") {
   const pill = $("#status-pill");
   const color = type === "ok" ? "success" : type === "warn" ? "warning" : "danger";
-  pill.innerHTML = `<span class="dot" style="background:var(--${color})"></span>${text}`;
+  pill.innerHTML = `<span class="dot" style="background:var(--${color});box-shadow:0 0 8px var(--${color})"></span><span class="status-text">${escapeHtml(text)}</span>`;
+}
+
+function showToast(msg, type = "info") {
+  const toast = $("#toast");
+  if (!toast) return;
+  toast.textContent = msg;
+  toast.className = `toast ${type}`;
+  toast.classList.remove("hidden");
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => toast.classList.add("hidden"), 4000);
 }
 
 function escapeHtml(str) {
@@ -228,7 +238,7 @@ async function loadRunDetail(runId) {
 
 async function startPipeline(mode, confirmSend = false) {
   const domain = $("#seed-domain").value.trim();
-  if (!domain) return alert("Enter a seed domain");
+  if (!domain) return showToast("Enter a seed domain", "error");
 
   $("#btn-dry-run").disabled = true;
   $("#btn-run").disabled = true;
@@ -270,6 +280,7 @@ function pollJob(jobId) {
       } else if (job.status === "completed") {
         clearInterval(pollTimer);
         setStatus("Pipeline completed", "ok");
+        showToast("Pipeline completed successfully", "success");
         enableButtons();
         if (job.run_id) {
           await refreshFlowData(job.run_id, 4);
@@ -281,7 +292,7 @@ function pollJob(jobId) {
         clearInterval(pollTimer);
         setStatus(`Failed: ${job.error}`, "danger");
         enableButtons();
-        alert(`Pipeline failed: ${job.error}`);
+        showToast(`Pipeline failed: ${job.error}`, "error");
       } else {
         setStatus(job.stage_label || "Running...", "warn");
       }

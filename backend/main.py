@@ -1,5 +1,6 @@
 """FastAPI backend — serves API + frontend static assets."""
 
+import logging
 import sys
 import uuid
 from pathlib import Path
@@ -10,9 +11,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+logger = logging.getLogger(__name__)
+
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
+STATIC_CACHE = {"Cache-Control": "public, max-age=300"}
 
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -35,6 +39,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _frontend_file(name: str) -> Path:
+    path = FRONTEND_DIR / name
+    if not path.is_file():
+        raise HTTPException(404, f"{name} not found")
+    return path
+
+
+@app.on_event("startup")
+async def verify_frontend() -> None:
+    required = ("index.html", "styles.css", "app.js")
+    missing = [name for name in required if not (FRONTEND_DIR / name).is_file()]
+    if missing:
+        logger.error("Missing frontend files %s in %s", missing, FRONTEND_DIR)
+    else:
+        logger.info("Serving frontend from %s", FRONTEND_DIR)
 
 
 class RunRequest(BaseModel):
@@ -99,9 +120,36 @@ def _confirm_send_task(job_id: str, run_id: int) -> None:
         job_store.update(job_id, status="failed", error=str(exc))
 
 
+@app.get("/static/styles.css", include_in_schema=False)
+async def stylesheet():
+    return FileResponse(
+        _frontend_file("styles.css"),
+        media_type="text/css",
+        headers=STATIC_CACHE,
+    )
+
+
+@app.get("/static/app.js", include_in_schema=False)
+async def javascript():
+    return FileResponse(
+        _frontend_file("app.js"),
+        media_type="application/javascript",
+        headers=STATIC_CACHE,
+    )
+
+
 @app.get("/")
 async def index():
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return FileResponse(
+        _frontend_file("index.html"),
+        media_type="text/html",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    raise HTTPException(404)
 
 
 @app.get("/api/health")
@@ -188,5 +236,7 @@ async def confirm_send_by_run(run_id: int, background_tasks: BackgroundTasks):
     return {"job_id": job_id, "status": "sending"}
 
 
-if FRONTEND_DIR.exists():
+if FRONTEND_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+else:
+    logger.warning("Frontend directory not found: %s", FRONTEND_DIR)

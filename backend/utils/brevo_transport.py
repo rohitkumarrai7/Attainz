@@ -87,6 +87,13 @@ def check_brevo_smtp(api_key: str, smtp_login: str, sender_email: str) -> tuple[
             "SMTP auth failed — verify BREVO_SMTP_LOGIN (xxxxx@smtp-brevo.com) and BREVO_API_KEY, or use a REST API key (xkeysib-...)",
         )
     except Exception as exc:
+        msg = str(exc).lower()
+        if "timed out" in msg or "timeout" in msg:
+            return (
+                False,
+                "SMTP connection timed out — cloud hosts often block port 587. "
+                "Use a Brevo REST API key (xkeysib-...) in BREVO_API_KEY on Render instead of the SMTP key.",
+            )
         return False, f"SMTP connection failed: {exc}"
 
 

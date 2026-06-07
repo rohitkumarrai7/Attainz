@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "buildCommand": "pip install -r requirements.txt",
+  "functions": {
+    "api/**/*.py": {
+      "maxDuration": 60
+    }
+  }
+}

@@ -75,10 +75,16 @@ def check_brevo_smtp(api_key: str, smtp_login: str, sender_email: str) -> tuple[
             server.ehlo()
             server.login(smtp_login, api_key)
         return True, f"SMTP relay OK — will send from {sender_email}"
-    except smtplib.SMTPAuthenticationError:
+    except smtplib.SMTPAuthenticationError as exc:
+        msg = str(exc).lower()
+        if "unauthorized ip" in msg or "525" in msg:
+            return (
+                False,
+                "SMTP blocked: unauthorized IP — add your IP in Brevo → SMTP & API → Authorized IPs, or disable IP restriction",
+            )
         return (
             False,
-            "SMTP auth failed — use the SMTP login from Brevo dashboard (xxxxx@smtp-brevo.com), not your account email. Or switch to a REST API key (xkeysib-...).",
+            "SMTP auth failed — verify BREVO_SMTP_LOGIN (xxxxx@smtp-brevo.com) and BREVO_API_KEY, or use a REST API key (xkeysib-...)",
         )
     except Exception as exc:
         return False, f"SMTP connection failed: {exc}"

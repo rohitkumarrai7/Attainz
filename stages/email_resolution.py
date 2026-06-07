@@ -58,23 +58,44 @@ class ProspeoEnrichProvider:
                         )
         return enriched
 
+    def _enrich_payloads(self, linkedin_url: str) -> list[dict[str, Any]]:
+        return [
+            {"only_verified_email": True, "data": {"linkedin_url": linkedin_url}},
+            {"only_verified_email": True, "linkedin_url": linkedin_url},
+        ]
+
     def _enrich_one(
         self,
         client: httpx.Client,
         headers: dict[str, str],
         contact: Contact,
     ) -> tuple[str | None, str]:
-        payload = {
-            "only_verified_email": True,
-            "data": {"linkedin_url": contact.linkedin_url},
-        }
-        response = self._enrich_request(client, headers, payload)
-        if response.status_code in (401, 403, 400) and "X-KEY" in headers:
-            fallback_headers = {
+        response: httpx.Response | None = None
+        header_sets = [headers]
+        if "X-KEY" in headers:
+            header_sets.append({
                 "X-API-KEY": self.settings.prospeo_api_key,
                 "Content-Type": "application/json",
-            }
-            response = self._enrich_request(client, fallback_headers, payload)
+            })
+
+        for hdrs in header_sets:
+            for payload in self._enrich_payloads(contact.linkedin_url):
+                response = self._enrich_request(client, hdrs, payload)
+                if response.status_code == 200:
+                    break
+                if response.status_code in (401, 403):
+                    break
+            if response and response.status_code == 200:
+                break
+
+        if not response:
+            return None, "unresolved"
+        if response.status_code in (401, 403):
+            response.raise_for_status()
+        if response.status_code == 400:
+            data = response.json()
+            if data.get("error_code") in ("NO_MATCH", "NOT_FOUND"):
+                return None, "unresolved"
         response.raise_for_status()
         data = response.json()
         if data.get("error"):

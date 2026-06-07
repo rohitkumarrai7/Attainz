@@ -229,6 +229,15 @@ uvicorn web.app:app --reload --port 8000
 
 Open **http://localhost:8000** in your browser.
 
+### Deploy to Vercel
+
+```bash
+# Install Vercel CLI, then from outreach-engine/
+vercel deploy --prod
+```
+
+Set environment variables in the Vercel dashboard (same keys as `.env.example`). The app uses `/tmp` for SQLite on Vercel. **Note:** long pipeline runs may hit serverless timeouts — use the CLI for full production runs; the Vercel deployment is best for the dashboard demo and API validation.
+
 ### What you can do in the UI
 
 | Feature | Description |

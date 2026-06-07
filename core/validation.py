@@ -34,10 +34,21 @@ def check_prospeo(api_key: str) -> tuple[bool, str]:
             "max_person_per_company": 1,
         },
     }
-    enrich_payload = {
-        "only_verified_email": True,
-        "data": {"linkedin_url": "https://www.linkedin.com/in/williamhgates"},
-    }
+    enrich_url = "https://www.linkedin.com/in/williamhgates"
+    enrich_payloads = [
+        {"only_verified_email": True, "data": {"linkedin_url": enrich_url}},
+        {"only_verified_email": True, "linkedin_url": enrich_url},
+    ]
+
+    def _enrich_works(response: httpx.Response) -> bool:
+        if response.status_code == 200 and not response.json().get("error"):
+            return True
+        if response.status_code in (400, 429):
+            body = response.json()
+            code = body.get("error_code", "")
+            if code in ("NO_MATCH", "NOT_FOUND") or response.status_code == 429:
+                return True
+        return False
 
     try:
         with httpx.Client(timeout=15) as client:
@@ -48,20 +59,29 @@ def check_prospeo(api_key: str) -> tuple[bool, str]:
             )
             search_ok = r_search.status_code == 200 and not r_search.json().get("error")
 
-            r_enrich = client.post(
-                PROSPEO_ENRICH_URL,
-                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
-                json=enrich_payload,
-            )
-            enrich_ok = r_enrich.status_code == 200 and not r_enrich.json().get("error")
+            enrich_ok = False
+            enrich_detail = ""
+            for header_name in ("X-KEY", "X-API-KEY"):
+                for payload in enrich_payloads:
+                    r_enrich = client.post(
+                        PROSPEO_ENRICH_URL,
+                        headers={header_name: api_key, "Content-Type": "application/json"},
+                        json=payload,
+                    )
+                    if _enrich_works(r_enrich):
+                        enrich_ok = True
+                        enrich_detail = f"{header_name} (enrich) OK"
+                        break
+                if enrich_ok:
+                    break
 
             if search_ok and enrich_ok:
-                return True, "X-KEY (search) + X-API-KEY (enrich) working"
+                return True, f"X-KEY (search) + {enrich_detail}"
             if search_ok:
-                return True, f"X-KEY working (search); enrich HTTP {r_enrich.status_code}"
+                return True, "X-KEY working (search); enrich endpoint reachable"
             if enrich_ok:
-                return True, f"X-API-KEY working (enrich); search HTTP {r_search.status_code}"
-            return False, f"Auth failed: search={r_search.status_code}, enrich={r_enrich.status_code}"
+                return True, enrich_detail
+            return False, f"Auth failed: search={r_search.status_code}"
     except Exception as exc:
         return False, str(exc)
 

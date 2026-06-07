@@ -1,14 +1,19 @@
 # Outreach Engine
 
-A production-grade Python CLI that automates the full cold-outreach pipeline for the Vocallabs/Subspace SDE assignment.
+A production-grade Python CLI and SaaS web dashboard that automates the full cold-outreach pipeline for the Vocallabs/Subspace SDE assignment.
 
 **One input. Four stages. Zero manual handoffs.**
 
 ```bash
+# CLI
 python pipeline.py validate
 python pipeline.py dry-run stripe.com
 python pipeline.py run stripe.com --confirm-send
 python pipeline.py report --run-id 1
+
+# Web dashboard
+uvicorn web.app:app --reload --port 8000
+# → http://localhost:8000
 ```
 
 Built by **Rohit Kumar Rai** — [rohit@divfixer.com](mailto:rohit@divfixer.com) | [DivFixer](https://divfixer.com) | [GitHub](https://github.com/rohitkumarrai7)
@@ -33,6 +38,7 @@ Sales teams spend hours manually finding lookalike companies, hunting decision-m
 ```mermaid
 flowchart TB
     CLI["pipeline.py CLI"] --> Orchestrator["PipelineOrchestrator"]
+    Web["web/app.py Dashboard"] --> Orchestrator
     Orchestrator --> S1["OceanStage"]
     Orchestrator --> S2["ProspeoStage"]
     Orchestrator --> S3["EmailResolutionStage"]
@@ -206,13 +212,48 @@ Record a 5–7 minute walkthrough covering:
 
 ---
 
+## Web Dashboard (SaaS UI)
+
+The web UI controls the full pipeline from start to finish — validate APIs, run dry-runs, execute live runs with a safety checkpoint, preview emails, and browse results.
+
+### Start the server
+
+```bash
+cd outreach-engine
+pip install -r requirements.txt
+uvicorn web.app:app --reload --port 8000
+```
+
+Open **http://localhost:8000** in your browser.
+
+### What you can do in the UI
+
+| Feature | Description |
+|---------|-------------|
+| **Dashboard** | Live stat cards (companies, contacts, emails, send count) |
+| **Run Pipeline** | Enter seed domain → Dry Run or Run with 4-stage progress |
+| **Safety Checkpoint** | Run mode pauses before sending; confirm in modal |
+| **Results** | Tables for companies, contacts, and resolved emails |
+| **API Status** | One-click validation of Ocean, Prospeo, and Brevo |
+| **Run History** | Click any past run to reload its results |
+
+### API endpoints
+
+- `GET /api/validate` — check API connectivity
+- `POST /api/runs` — start pipeline (`{"domain":"stripe.com","mode":"dry_run"}`)
+- `GET /api/jobs/{job_id}` — poll live progress
+- `POST /api/runs/{run_id}/confirm-send` — confirm email delivery
+- `GET /api/runs` — list run history
+- `GET /api/runs/{run_id}/data` — export run data
+
+---
+
 ## Future Improvements
 
 - Async pipeline with `asyncio` + `httpx.AsyncClient` for parallel enrichment
 - PostgreSQL migration for multi-user production deployment
 - CRM export (HubSpot, Salesforce)
 - Open-rate feedback loop for A/B subject optimization
-- Web dashboard for run history and analytics
 
 ---
 
@@ -220,7 +261,14 @@ Record a 5–7 minute walkthrough covering:
 
 ```
 outreach-engine/
-├── pipeline.py              # CLI entry point + orchestrator
+├── pipeline.py              # CLI entry point
+├── core/
+│   ├── orchestrator.py      # Shared pipeline orchestrator (CLI + web)
+│   └── validation.py        # API validation helpers
+├── web/
+│   ├── app.py               # FastAPI SaaS dashboard
+│   ├── job_store.py         # In-memory job progress tracking
+│   └── static/              # Dashboard HTML, CSS, JS
 ├── stages/
 │   ├── base.py              # PipelineStage exports
 │   ├── ocean.py             # Stage 1

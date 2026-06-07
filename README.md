@@ -5,14 +5,14 @@ A production-grade Python CLI and SaaS web dashboard that automates the full col
 **One input. Four stages. Zero manual handoffs.**
 
 ```bash
-# CLI
+# CLI (from backend/)
+cd backend
 python pipeline.py validate
 python pipeline.py dry-run stripe.com
 python pipeline.py run stripe.com --confirm-send
-python pipeline.py report --run-id 1
 
-# Web dashboard
-uvicorn web.app:app --reload --port 8000
+# Web app (backend serves API + frontend)
+uvicorn main:app --reload --port 8000
 # → http://localhost:8000
 ```
 
@@ -38,7 +38,8 @@ Sales teams spend hours manually finding lookalike companies, hunting decision-m
 ```mermaid
 flowchart TB
     CLI["pipeline.py CLI"] --> Orchestrator["PipelineOrchestrator"]
-    Web["web/app.py Dashboard"] --> Orchestrator
+    Web["backend/main.py API"] --> Orchestrator
+    Frontend["frontend/ static UI"] --> Web
     Orchestrator --> S1["OceanStage"]
     Orchestrator --> S2["ProspeoStage"]
     Orchestrator --> S3["EmailResolutionStage"]
@@ -219,24 +220,28 @@ Record a 5–7 minute walkthrough covering:
 
 The web UI controls the full pipeline from start to finish — validate APIs, run dry-runs, execute live runs with a safety checkpoint, preview emails, and browse results.
 
-### Start the server
+### Start locally
 
 ```bash
 cd outreach-engine
-pip install -r requirements.txt
-uvicorn web.app:app --reload --port 8000
+pip install -r backend/requirements.txt
+cd backend
+uvicorn main:app --reload --port 8000
 ```
 
-Open **http://localhost:8000** in your browser.
+Open **http://localhost:8000** — the FastAPI backend serves the frontend from `frontend/`.
 
-### Deploy to Vercel
+### Deploy to Render (recommended — free tier)
 
-```bash
-# Install Vercel CLI, then from outreach-engine/
-vercel deploy --prod
-```
+1. Push repo to GitHub
+2. [Render Dashboard](https://dashboard.render.com) → **New Web Service** → connect repo
+3. Render auto-detects `render.yaml`, or set manually:
+   - **Build:** `pip install -r backend/requirements.txt`
+   - **Start:** `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. Add environment variables from `.env.example` in Render dashboard
+5. Deploy — one URL serves **both** API and dashboard
 
-Set environment variables in the Vercel dashboard (same keys as `.env.example`). The app uses `/tmp` for SQLite on Vercel. **Note:** long pipeline runs may hit serverless timeouts — use the CLI for full production runs; the Vercel deployment is best for the dashboard demo and API validation.
+**512 MB free tier:** sufficient for this app (lightweight FastAPI + static files). Pipeline runs use ~100–200 MB RAM.
 
 ### What you can do in the UI
 
@@ -273,30 +278,24 @@ Set environment variables in the Vercel dashboard (same keys as `.env.example`).
 
 ```
 outreach-engine/
-├── pipeline.py              # CLI entry point
-├── core/
-│   ├── orchestrator.py      # Shared pipeline orchestrator (CLI + web)
-│   └── validation.py        # API validation helpers
-├── web/
-│   ├── app.py               # FastAPI SaaS dashboard
-│   ├── job_store.py         # In-memory job progress tracking
-│   └── static/              # Dashboard HTML, CSS, JS
-├── stages/
-│   ├── base.py              # PipelineStage exports
-│   ├── ocean.py             # Stage 1
-│   ├── prospeo.py           # Stage 2
-│   ├── email_resolution.py  # Stage 3 (Prospeo enrich)
-│   └── brevo.py             # Stage 4
-├── models/schemas.py        # Pydantic models + PipelineStage ABC
-├── storage/database.py      # SQLite persistence + dedup + resumability
-├── utils/
-│   ├── config.py            # Settings from .env
-│   ├── retry.py             # Backoff + rate limiting
-│   ├── logger.py            # JSONL observability
-│   └── export.py            # CSV export
-├── templates/outreach.j2    # DivFixer-branded HTML email template
-├── outputs/                 # CSV exports
-└── logs/                    # JSONL request logs
+├── frontend/                # Dashboard UI (HTML, CSS, JS)
+│   ├── index.html
+│   ├── app.js
+│   └── styles.css
+├── backend/                 # Python API + pipeline
+│   ├── main.py              # FastAPI entry (serves frontend + /api/*)
+│   ├── pipeline.py          # CLI entry point
+│   ├── job_store.py         # In-memory job progress
+│   ├── requirements.txt
+│   ├── core/                # Orchestrator + validation
+│   ├── stages/              # Ocean, Prospeo, enrich, Brevo
+│   ├── models/              # Pydantic schemas
+│   ├── storage/             # SQLite persistence
+│   ├── utils/               # Config, retry, logging
+│   └── templates/           # Email Jinja2 template
+├── render.yaml              # Render deployment config
+├── .env                     # Secrets (gitignored)
+└── data/                    # SQLite DB, logs, CSV exports
 ```
 
 ---
